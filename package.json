@@ -15,6 +15,9 @@
     "Service",
     "Directory"
   ],
+  "dependencies": {
+    "mkdirp": "0.5.x"
+  },
   "author": "HERS Belgrade",
   "license": "ISC"
 }
