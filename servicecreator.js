@@ -44,7 +44,7 @@ function createDirectoryService(execlib,ParentServicePack){
     }
   };
   DirectoryService.prototype.dataToFile = function(data){
-    return this.state.get('text') ? new Buffer(JSON.stringify(data)) : data ;
+    return this.state.get('text') ? new Buffer(JSON.stringify(data,null,2)) : data ;
   };
   DirectoryService.prototype.fileToData = function(chunk){
     if(this.state.get('text')){
