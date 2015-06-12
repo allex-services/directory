@@ -1,4 +1,5 @@
 function createServiceSink(execlib,ParentSink){
+  'use strict';
 
   if(!ParentSink){
     ParentSink = execlib.execSuite.registry.get('.').SinkMap.get('user');

@@ -1,6 +1,7 @@
 var fs = require('fs');
 
 function createUser(execlib,ParentUser){
+  'use strict';
 
   if(!ParentUser){
     ParentUser = execlib.execSuite.ServicePack.Service.prototype.userFactory.get('user');

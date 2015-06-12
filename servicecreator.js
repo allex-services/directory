@@ -3,6 +3,7 @@ var fs = require('fs'),
     mkdirp = require('mkdirp');
 
 function createDirectoryService(execlib,ParentServicePack){
+  'use strict';
   var ParentService = ParentServicePack.Service,
       lib = execlib.lib;
 
