@@ -14,17 +14,13 @@ function createDirectoryService(execlib,ParentServicePack){
     };
   }
 
-  function satisfyPath(path){
-    var p = Path.isAbsolute(path) ? path : Path.join(process.cwd(),path);
-    mkdirp(path);
-  }
 
   function DirectoryService(prophash){
     ParentService.call(this,prophash);
     if(!('path' in prophash)){
       throw new lib.Error('propertyhash misses the path field');
     }
-    satisfyPath(prophash.path);
+    this.satisfyPath(prophash.path);
     this.state.set('path',prophash.path);
     this.state.set('text',prophash.text||false);
   }
@@ -32,8 +28,14 @@ function createDirectoryService(execlib,ParentServicePack){
   DirectoryService.prototype.__cleanUp = function(){
     ParentService.prototype.__cleanUp.call(this);
   };
+  DirectoryService.prototype.satisfyPath = function(path){
+    var p = Path.isAbsolute(path) ? path : Path.join(process.cwd(),path);
+    mkdirp(path);
+  }
   DirectoryService.prototype.pathForFilename = function(filename){
-    return Path.join(this.state.get('path'),filename);
+    var ret = Path.join(this.state.get('path'),filename);
+    this.satisfyPath(Path.dirname(ret));
+    return ret;
   };
   DirectoryService.prototype.fileSize = function(filename){
     try{
