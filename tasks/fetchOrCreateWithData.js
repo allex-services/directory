@@ -23,15 +23,9 @@ function createFetchOrCreateWithDataTask(execlib){
   };
   FetchOrCreateWithDataTask.prototype.go = function(){
     this.sink.call('fetch',this.filename).done(
-      this.onSuccess.bind(this),
+      this.triggerCb.bind(this),
       this.onError.bind(this)
     );
-  };
-  FetchOrCreateWithDataTask.prototype.onSuccess = function(data){
-    this.cb(data);
-    if(this.singleshot){
-      this.destroy();
-    }
   };
   FetchOrCreateWithDataTask.prototype.onError = function(reason){
     console.error('onError',reason);
@@ -43,7 +37,13 @@ function createFetchOrCreateWithDataTask(execlib){
     }
   };
   FetchOrCreateWithDataTask.prototype.onWriteSuccess = function(writeresult){
-    this.cb(this.data);
+    this.triggerCb(this.data);
+  };
+  FetchOrCreateWithDataTask.prototype.triggerCb = function(data){
+    this.cb(data);
+    if(this.singleshot){
+      this.destroy();
+    }
   };
   FetchOrCreateWithDataTask.prototype.compulsoryConstructionProperties = ['sink','filename','data','cb'];
   return FetchOrCreateWithDataTask;
