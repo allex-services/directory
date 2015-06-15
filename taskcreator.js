@@ -3,6 +3,9 @@ function createTasks(execlib){
   return [{
     name: 'fetchOrCreateWithData',
     klass: require('./tasks/fetchOrCreateWithData')(execlib)
+  },{
+    name: 'transmitFile',
+    klass: require('./tasks/transmitFile')(execlib)
   }];
 }
 

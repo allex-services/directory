@@ -1,11 +1,10 @@
-var fs = require('fs'),
-    Path = require('path'),
-    mkdirp = require('mkdirp');
+var fs = require('fs');
 
 function createDirectoryService(execlib,ParentServicePack){
   'use strict';
   var ParentService = ParentServicePack.Service,
-      lib = execlib.lib;
+    lib = execlib.lib,
+    util = require('./util')(execlib);
 
   function factoryCreator(parentFactory){
     return {
@@ -20,7 +19,7 @@ function createDirectoryService(execlib,ParentServicePack){
     if(!('path' in prophash)){
       throw new lib.Error('propertyhash misses the path field');
     }
-    this.satisfyPath(prophash.path);
+    util.satisfyPath(prophash.path);
     this.state.set('path',prophash.path);
     this.state.set('text',prophash.text||false);
   }
@@ -28,23 +27,11 @@ function createDirectoryService(execlib,ParentServicePack){
   DirectoryService.prototype.__cleanUp = function(){
     ParentService.prototype.__cleanUp.call(this);
   };
-  DirectoryService.prototype.satisfyPath = function(path){
-    var p = Path.isAbsolute(path) ? path : Path.join(process.cwd(),path);
-    mkdirp(path);
-  }
   DirectoryService.prototype.pathForFilename = function(filename){
-    var ret = Path.join(this.state.get('path'),filename);
-    this.satisfyPath(Path.dirname(ret));
-    return ret;
+    return util.pathForFilename(this.state.get('path'),filename);
   };
   DirectoryService.prototype.fileSize = function(filename){
-    try{
-      var fstats = fs.lstatSync(this.pathForFilename(filename));
-      return fstats.size;
-    }
-    catch(e){
-      return 0;
-    }
+    return util.fileSize(filename);
   };
   DirectoryService.prototype.dataToFile = function(data){
     return this.state.get('text') ? new Buffer(JSON.stringify(data,null,2)) : data ;
