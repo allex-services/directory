@@ -22,6 +22,7 @@ function fileSize(filepath){
 }
 
 function createUtil(execlib){
+  'use strict';
   return {
     satisfyPath: satisfyPath,
     pathForFilename: pathForFilename,
