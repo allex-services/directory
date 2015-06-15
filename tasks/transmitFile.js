@@ -15,6 +15,7 @@ function createTransmitFileTask(execlib){
     this.deleteonsuccess = prophash.deleteonsuccess || false;
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
     this.file = null;
+    this.filesize = util.fileSize(this.filepath);
     this.succeeded = false;
     this.buffer = new Buffer(64*1024);
   }
@@ -44,11 +45,19 @@ function createTransmitFileTask(execlib){
       return this.destroy();
     }
     this.file = filehandle;
+    taskRegistry.run('readState',{
+      state: taskRegistry.run('materializeState',{
+        sink: this.sink
+      }),
+      name: ['uploads',this.filename],
+      cb: this.onWriteConfirmed.bind(this)
+    });
     taskRegistry.run('transmitTcp',{
       sink: this.sink,
       ipaddress: this.ipaddress,
       options: {
-        filename: this.filename
+        filename: this.filename,
+        filesize: this.filesize
       },
       onPayloadNeeded: this.readChunk.bind(this)
     });
@@ -68,6 +77,12 @@ function createTransmitFileTask(execlib){
       }
     }
     return buff;
+  };
+  TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
+    this.succeeded = confirmed === this.filesize;
+    if(this.succeeded){
+      lib.runNext(this.destroy.bind(this));
+    }
   };
   TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
   return TransmitFileTask;

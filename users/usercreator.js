@@ -15,16 +15,21 @@ function createUser(execlib,ParentUser){
     if(!options.filename){
       throw new lib.Error('NO_FILENAME_SPECIFIED_FOR_UPLOAD');
     }
+    this.uploadpath = ['uploads',this.options.filename];
     this.file = null;
+    this.written = 0;
     this.openFile();
   }
   lib.inherit(FileTransmissionServer,ParentUser.prototype.TcpTransmissionServer);
   FileTransmissionServer.prototype.destroy = function(){
+    this.user.__service.state.remove(this.uploadpath);
+    this.written = null;
     if(this.file){
       console.log('closing',this.file);
       fs.closeSync(this.file);
     }
     this.file = null;
+    this.uploadpath = null;
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
   FileTransmissionServer.prototype.start = function(defer){
@@ -38,13 +43,15 @@ function createUser(execlib,ParentUser){
     if(!this.file){
       this.closeAllAndDie(server,connection);
     }else{
-      fs.writeSync(this.file,buffer,0,buffer.length);
+      this.written += fs.writeSync(this.file,buffer,0,buffer.length);
+      this.user.state.set(this.uploadpath,this.written);
     }
   };
   FileTransmissionServer.prototype.openFile = function(){
     if(!this.file){
       try{
         this.file = fs.openSync(this.user.__service.pathForFilename(this.options.filename),'w');
+        this.user.set(this.uploadpath,0);
       }catch(e){
         console.log(e);
         //looking for a "too many open files" error to retry
@@ -83,28 +90,35 @@ function createUser(execlib,ParentUser){
   };
   User.prototype._checkOnServiceUploads = function(options,defer){
     var filename = options.filename,
+      filesize = options.filesize,
       uploadpath = ['uploads',filename],
-      uploadactive = this.__service.state.get(uploadpath);
-    if(uploadactive){
+      uploadactive = this.__service.state.get(uploadpath),
+      und;
+    console.log('uploadactive for',uploadpath,':',uploadactive);
+    if(uploadactive!==und){
       this.waitinguploads.add(filename,new execSuite.ADS.listenToScalar(uploadpath,{d:this.requestTcpTransmission.bind(this,options,defer)}));
       return true;
     }
+    this.__service.state.set(uploadpath,true);
   };
   User.prototype.requestTcpTransmission = function(options,defer){
-    console.log('Directory User got requestTcpTransmission',options);
-    if(options.filename){
-      if(this._checkOnWaitingUploads(options,defer)){
-        return;
-      }
-      if(this._checkOnServiceUploads(options,defer)){
-        return;
-      }
-      ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
-    }else{
+    if(!options.filename){
       //for now, reject. If DirectoryService User finds out how to 
       //handle other transmission scenarios, continue from here.
       defer.reject(new lib.Error('NO_FILENAME_SPECIFIED_FOR_UPLOAD','filename missing in requestTcpTransmission options'));
+      return;
     }
+    if(!options.filesize){ //yes, 0 is also invalid...
+      defer.reject(new lib.Error('NO_FILESIZE_SPECIFIED_FOR_UPLOAD','filesize missing in requestTcpTransmission options'));
+      return;
+    }
+    if(this._checkOnWaitingUploads(options,defer)){
+      return;
+    }
+    if(this._checkOnServiceUploads(options,defer)){
+      return;
+    }
+    ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
   User.prototype.fetch = function(filename,defer){
     try{
