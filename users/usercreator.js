@@ -38,8 +38,7 @@ function createUser(execlib,ParentUser){
     if(!this.file){
       this.closeAllAndDie(server,connection);
     }else{
-      console.log('writing',buffer,'to',this.file);
-      console.log(fs.writeSync(this.file,buffer,0,buffer.length),'bytes written');
+      fs.writeSync(this.file,buffer,0,buffer.length);
     }
   };
   FileTransmissionServer.prototype.openFile = function(){
