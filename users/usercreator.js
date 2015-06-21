@@ -120,23 +120,27 @@ function createUser(execlib,ParentUser){
     }
     ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
-  User.prototype.fetch = function(filename,defer){
+  User.prototype.fetch = function(filename,parserinfo,defer){
     try{
-      defer.resolve(
-        this.__service.fileToData(
-          fs.readFileSync(this.__service.pathForFilename(filename))
-        )
-      );
+    var fn = this.__service.pathForFilename(filename);
+    this.__service.fileToData(
+      parserinfo,
+      fs.readFileSync(fn),
+      defer
+    );
     }
     catch(e){
       defer.reject(e);
     }
   };
-  User.prototype.write = function(filename,data,defer){
+  User.prototype.write = function(filename,parserinfo,data,defer){
+    console.trace();
+    console.log(arguments);
+    var service = this.__service, fn = service.pathForFilename(filename);
     if(data===null){
       try{
-        fs.closeSync(fs.openSync(this.__service.pathForFilename(filename),'w'));
-        defer.resolve({filesize:this.__service.fileSize(filename)});
+        fs.closeSync(fs.openSync(fn,'w'));
+        defer.resolve({filesize:service.fileSize(filename)});
       }
       catch(e){
         console.log(e);
@@ -144,8 +148,13 @@ function createUser(execlib,ParentUser){
       }
     }else{
       try{
-        fs.writeFileSync(this.__service.pathForFilename(filename),this.__service.dataToFile(data));
-        defer.resolve({filesize:this.__service.fileSize(filename)});
+        this.__service.dataToFile(parserinfo,data).done(
+          function(filedata){
+            fs.writeFileSync(fn,filedata);
+            defer.resolve({filesize:service.fileSize(filename)});
+          },
+          defer.reject.bind(defer)
+        );
       }
       catch(e){
         console.log(e);

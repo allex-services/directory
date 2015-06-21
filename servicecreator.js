@@ -4,6 +4,9 @@ function createDirectoryService(execlib,ParentServicePack){
   'use strict';
   var ParentService = ParentServicePack.Service,
     lib = execlib.lib,
+    q = lib.q,
+    execSuite = execlib.execSuite,
+    parserRegistry = execSuite.parserRegistry,
     util = require('./util')(execlib);
 
   function factoryCreator(parentFactory){
@@ -21,7 +24,6 @@ function createDirectoryService(execlib,ParentServicePack){
     }
     util.satisfyPath(prophash.path);
     this.state.set('path',prophash.path);
-    this.state.set('text',prophash.text||false);
   }
   ParentService.inherit(DirectoryService,factoryCreator);
   DirectoryService.prototype.__cleanUp = function(){
@@ -33,19 +35,26 @@ function createDirectoryService(execlib,ParentServicePack){
   DirectoryService.prototype.fileSize = function(filename){
     return util.fileSize(filename);
   };
-  DirectoryService.prototype.dataToFile = function(data){
-    return this.state.get('text') ? new Buffer(JSON.stringify(data,null,2)) : data ;
+  DirectoryService.prototype.dataToFile = function(parserinfo,data){
+    var d = q.defer();
+    parserRegistry.spawn(parserinfo.modulename,parserinfo.propertyhash).done(
+      function(parser){
+        d.resolve(parser.dataToFile(data));
+        parser.destroy();
+      },
+      d.reject.bind(d)
+    );
+    return d.promise;
   };
-  DirectoryService.prototype.fileToData = function(chunk){
-    if(this.state.get('text')){
-      if(chunk.length){
-        return JSON.parse(chunk.toString());
-      }else{
-        return null;
-      }
-    }else{
-      return chunk;
-    }
+  DirectoryService.prototype.fileToData = function(parserinfo,chunk,defer){
+    console.log('fileToData?',parserinfo,chunk);
+    parserRegistry.spawn(parserinfo.modulename,parserinfo.propertyhash).done(
+      function(parser){
+        defer.resolve(parser.fileToData(chunk));
+        parser.destroy();
+      },
+      defer.reject.bind(defer)
+    );
   };
   
   return DirectoryService;

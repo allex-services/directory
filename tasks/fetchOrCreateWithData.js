@@ -9,6 +9,10 @@ function createFetchOrCreateWithDataTask(execlib){
     this.sink = prophash.sink;
     this.filename = prophash.filename;
     this.data = prophash.data;
+    this.parserinfo = {
+      modulename: prophash.parsermodulename,
+      propertyhash: prophash.parserpropertyhash
+    };
     this.cb = prophash.cb;
     this.singleshot = prophash.singleshot;
   }
@@ -16,13 +20,14 @@ function createFetchOrCreateWithDataTask(execlib){
   FetchOrCreateWithDataTask.prototype.__cleanUp = function(){
     this.singleshot = null;
     this.cb = null;
+    this.parserinfo = null;
     this.data = null;
     this.filename = null;
     this.sink = null;
     SinkTask.prototype.__cleanUp.call(this);
   };
   FetchOrCreateWithDataTask.prototype.go = function(){
-    this.sink.call('fetch',this.filename).done(
+    this.sink.call('fetch',this.filename,this.parserinfo).done(
       this.triggerCb.bind(this),
       this.onError.bind(this)
     );
@@ -30,7 +35,7 @@ function createFetchOrCreateWithDataTask(execlib){
   FetchOrCreateWithDataTask.prototype.onError = function(reason){
     console.error('onError',reason);
     if(reason.code === 'ENOENT'){
-      this.sink.call('write',this.filename,this.data).done(
+      this.sink.call('write',this.filename,this.parserinfo,this.data).done(
         this.onWriteSuccess.bind(this),
         this.destroy.bind(this)
       );
@@ -45,7 +50,7 @@ function createFetchOrCreateWithDataTask(execlib){
       this.destroy();
     }
   };
-  FetchOrCreateWithDataTask.prototype.compulsoryConstructionProperties = ['sink','filename','data','cb'];
+  FetchOrCreateWithDataTask.prototype.compulsoryConstructionProperties = ['sink','filename','data','parsermodulename','cb'];
   return FetchOrCreateWithDataTask;
 }
 
