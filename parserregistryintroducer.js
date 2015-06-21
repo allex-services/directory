@@ -13,14 +13,12 @@ function parserRegistryIntroducer(execlib){
   lib.inherit(ParserRegistry,lib.Map);
   ParserRegistry.prototype.register = function (modulename) {
     var d = q.defer();
-    console.log('register',modulename,'?');
     try{
       var parserctor = this.get(modulename);
       if(!parserctor){
         parserctor = require(modulename)(execlib);
         this.add(modulename,parserctor);
       }
-      console.log('resolving',modulename,'with',parserctor);
       d.resolve(parserctor);
     }
     catch(e){
@@ -34,7 +32,6 @@ function parserRegistryIntroducer(execlib){
     var d = q.defer();
     this.register(modulename).done(
       function(parserctor){
-        console.log('modulename',modulename,' => parserctor',parserctor);
         d.resolve(new parserctor(prophash||{}));
       },
       d.reject.bind(d)

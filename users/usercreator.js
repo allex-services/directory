@@ -134,8 +134,6 @@ function createUser(execlib,ParentUser){
     }
   };
   User.prototype.write = function(filename,parserinfo,data,defer){
-    console.trace();
-    console.log(arguments);
     var service = this.__service, fn = service.pathForFilename(filename);
     if(data===null){
       try{

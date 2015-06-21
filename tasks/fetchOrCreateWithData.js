@@ -33,12 +33,14 @@ function createFetchOrCreateWithDataTask(execlib){
     );
   };
   FetchOrCreateWithDataTask.prototype.onError = function(reason){
-    console.error('onError',reason);
     if(reason.code === 'ENOENT'){
       this.sink.call('write',this.filename,this.parserinfo,this.data).done(
         this.onWriteSuccess.bind(this),
         this.destroy.bind(this)
       );
+    }else{
+      console.error('unrecoverable error',reason,'fetchOrCreateWithData task will end now');
+      this.destroy();
     }
   };
   FetchOrCreateWithDataTask.prototype.onWriteSuccess = function(writeresult){

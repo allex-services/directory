@@ -47,7 +47,6 @@ function createDirectoryService(execlib,ParentServicePack){
     return d.promise;
   };
   DirectoryService.prototype.fileToData = function(parserinfo,chunk,defer){
-    console.log('fileToData?',parserinfo,chunk);
     parserRegistry.spawn(parserinfo.modulename,parserinfo.propertyhash).done(
       function(parser){
         defer.resolve(parser.fileToData(chunk));
