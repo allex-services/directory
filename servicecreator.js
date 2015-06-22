@@ -22,9 +22,15 @@ function createDirectoryService(execlib,ParentServicePack){
     util.satisfyPath(prophash.path);
     this.state.set('path',prophash.path);
     this.state.set('text',prophash.text||false);
+    this.parser = require('allex_jsonparser');
   }
   ParentService.inherit(DirectoryService,factoryCreator);
   DirectoryService.prototype.__cleanUp = function(){
+    if(!this.parser){
+      return;
+    }
+    this.parser.destroy();
+    this.parser = null;
     ParentService.prototype.__cleanUp.call(this);
   };
   DirectoryService.prototype.pathForFilename = function(filename){
@@ -34,9 +40,12 @@ function createDirectoryService(execlib,ParentServicePack){
     return util.fileSize(filename);
   };
   DirectoryService.prototype.dataToFile = function(data){
-    return this.state.get('text') ? new Buffer(JSON.stringify(data,null,2)) : data ;
+    return this.parser.dataToFile(data);
+    //return this.state.get('text') ? new Buffer(JSON.stringify(data,null,2)) : data ;
   };
   DirectoryService.prototype.fileToData = function(chunk){
+    return this.parser.fileToData(chunk);
+    /*
     if(this.state.get('text')){
       if(chunk.length){
         return JSON.parse(chunk.toString());
@@ -46,6 +55,7 @@ function createDirectoryService(execlib,ParentServicePack){
     }else{
       return chunk;
     }
+    */
   };
   
   return DirectoryService;

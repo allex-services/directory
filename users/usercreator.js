@@ -25,8 +25,8 @@ function createUser(execlib,ParentUser){
     this.user.__service.state.remove(this.uploadpath);
     this.written = null;
     if(this.file){
-      console.log('closing',this.file);
-      fs.closeSync(this.file);
+      this.onTransmissionDone();
+      return;
     }
     this.file = null;
     this.uploadpath = null;
@@ -61,6 +61,12 @@ function createUser(execlib,ParentUser){
         this.destroy();
       }
     }
+  };
+  FileTransmissionServer.prototype.onTransmissionDone = function(){
+    console.log('closing',this.file);
+    fs.closeSync(this.file);
+    this.file = null;
+    this.destroy();
   };
 
   function User(prophash){
@@ -111,6 +117,9 @@ function createUser(execlib,ParentUser){
     if(!options.filesize){ //yes, 0 is also invalid...
       defer.reject(new lib.Error('NO_FILESIZE_SPECIFIED_FOR_UPLOAD','filesize missing in requestTcpTransmission options'));
       return;
+    }
+    if(options.parsermodulename){
+      require(options.parsermodulename);
     }
     if(this._checkOnWaitingUploads(options,defer)){
       return;
