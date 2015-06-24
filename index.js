@@ -1,14 +1,13 @@
 function createServicePack(execlib){
   'use strict';
-  var execSuite = execlib.execSuite,
-  ParentServicePack = execSuite.registry.get('.');
-  require('./parserregistryintroducer')(execlib);
+  var ret = require('./clientside')(execlib),
+    execSuite = execlib.execSuite,
+    ParentServicePack = execSuite.registry.get('.');
 
-  return {
-    Service: require('./servicecreator')(execlib,ParentServicePack),
-    SinkMap: require('./sinkmapcreator')(execlib,ParentServicePack),
-    Tasks: require('./taskcreator')(execlib)
-  };
+  require('./parserregistryintroducer')(execlib);
+  ret.Service = require('./servicecreator')(execlib,ParentServicePack),
+
+  return ret;
 }
 
 module.exports = createServicePack;
