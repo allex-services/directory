@@ -5,7 +5,7 @@ function createServicePack(execlib){
     ParentServicePack = execSuite.registry.get('.');
 
   require('./parserregistryintroducer')(execlib);
-  ret.Service = require('./servicecreator')(execlib,ParentServicePack),
+  ret.Service = require('./servicecreator')(execlib,ParentServicePack);
 
   return ret;
 }
