@@ -2,6 +2,7 @@ function createServicePack(execlib){
   'use strict';
   var execSuite = execlib.execSuite,
   ParentServicePack = execSuite.registry.get('.');
+  require('./parserregistryintroducer')(execlib);
 
   return {
     Service: require('./servicecreator')(execlib,ParentServicePack),

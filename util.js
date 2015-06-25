@@ -4,7 +4,7 @@ var fs = require('fs'),
 
 function satisfyPath(path){
   var p = Path.isAbsolute(path) ? path : Path.join(process.cwd(),path);
-  mkdirp(path);
+  mkdirp.sync(path);
 }
 function pathForFilename(path,filename){
   var ret = Path.join(path,filename);

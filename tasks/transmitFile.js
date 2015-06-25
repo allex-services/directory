@@ -12,6 +12,9 @@ function createTransmitFileTask(execlib){
     this.sink = prophash.sink;
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
+    this.parsermodulename = prophash.parsermodulename;
+    this.onRecord = prophash.onRecord;
+    this.onInvalidRecord = prophash.onInvalidRecord;
     this.deleteonsuccess = prophash.deleteonsuccess || false;
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
     this.file = null;
@@ -57,7 +60,8 @@ function createTransmitFileTask(execlib){
       ipaddress: this.ipaddress,
       options: {
         filename: this.filename,
-        filesize: this.filesize
+        filesize: this.filesize,
+        parsermodulename: this.parsermodulename
       },
       onPayloadNeeded: this.readChunk.bind(this)
     });
@@ -81,10 +85,22 @@ function createTransmitFileTask(execlib){
   TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
     this.succeeded = confirmed === this.filesize;
     if(this.succeeded){
-      lib.runNext(this.destroy.bind(this));
+      if(this.parsermodulename){
+        this.sink.call('parse',this.parsermodulename,this.filename).done(function(result){
+          console.log('result',result);
+        },
+        function(error){
+          console.error(error);
+        },
+        function(record){
+          console.log('record',record);
+        });
+      }else{
+        lib.runNext(this.destroy.bind(this));
+      }
     }
   };
-  TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
+  TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'/*,'onRecord','onInvalidRecord'*/];
   return TransmitFileTask;
 }
 
