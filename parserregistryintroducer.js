@@ -11,8 +11,8 @@ function parserRegistryIntroducer(execlib){
     lib.Map.call(this);
   }
   lib.inherit(ParserRegistry,lib.Map);
-  ParserRegistry.prototype.register = function (modulename) {
-    var d = q.defer();
+  ParserRegistry.prototype.register = function (modulename,defer) {
+    var d = defer || q.defer();
     try{
       var parserctor = this.get(modulename);
       if(!parserctor){
@@ -22,9 +22,13 @@ function parserRegistryIntroducer(execlib){
       d.resolve(parserctor);
     }
     catch(e){
-      console.log(e.stack);
-      console.log(e);
-      d.reject(e);
+      if(execSuite.installFromError){
+        execSuite.installFromError(this.onInstallFromError.bind(this,modulename,d,e),e);
+      }else{
+        console.log(e.stack);
+        console.log(e);
+        d.reject(e);
+      }
     }
     return d.promise;
   };
@@ -37,6 +41,13 @@ function parserRegistryIntroducer(execlib){
       d.reject.bind(d)
     );
     return d.promise;
+  };
+  ParserRegistry.prototype.onInstallFromError = function (modulename,defer,error,ok) {
+    if(ok){
+      this.register(modulename,defer);
+    }else{
+      defer.reject(error);
+    }
   };
   execSuite.parserRegistry = new ParserRegistry();
 }
