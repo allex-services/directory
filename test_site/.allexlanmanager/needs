@@ -1,0 +1,16 @@
+[
+  {
+    "modulename": "allex_cdnservice",
+    "instancename": "Cdn",
+    "propertyhash": {
+      "path": "/home/veljko/work/allex-dev/allex/allex/node_modules/allex_directoryservice",
+      "webapp_suite": "test_site",
+      "waitforcomponents": "directory",
+      "cache": 0
+    }
+  },
+  {
+    "modulename": "/home/veljko/work/allex-dev/allex/allex/node_modules/allex_directoryservice",
+    "instancename": "Directory"
+  }
+]

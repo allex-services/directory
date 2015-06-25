@@ -1,0 +1,285 @@
+{
+  "pages": {
+    "index": {
+      "jstemplates": [
+        {
+          "suffix": "_menu.js",
+          "component": "angular.lib",
+          "file": "templates/menus.js",
+          "stringify": [
+            "menu"
+          ],
+          "data": {
+            "menu": {
+              "left-side": {
+                "menus": []
+              },
+              "main": {
+                "jedan": "dva",
+                "menus": [
+                  {
+                    "label": "Menu ITEM 1",
+                    "link": "form.error",
+                    "class": "some_shity_class",
+                    "args": {
+                      "config": {
+                        "content": "Neki jebeni notification",
+                        "title": "samo da te vidim"
+                      }
+                    },
+                    "iconclass": "fa fa-camera-retro"
+                  },
+                  {
+                    "status": "loggedin",
+                    "role": [
+                      "admin",
+                      "player"
+                    ],
+                    "label": "Menu ITEM 2",
+                    "link": "view.testme"
+                  },
+                  {
+                    "status": "loggedin",
+                    "label": "Menu ITEM 3",
+                    "link": "form.success",
+                    "args": {
+                      "config": {
+                        "content": "Neki success {{_ctrl.data.samo_da_te_vidim}}"
+                      },
+                      "data": {
+                        "samo_da_te_vidim": 3
+                      }
+                    },
+                    "class": "some_shity_class",
+                    "iconclass": "some_shity_icon_class"
+                  },
+                  {
+                    "status": "loggedin",
+                    "label": "Menu Item 4",
+                    "link": "form.form1",
+                    "menus": [
+                      {
+                        "status": "loggedin",
+                        "label": "Submenu item 1",
+                        "link": "form.form2",
+                        "iconclass": "some_shiti_icon_class2"
+                      },
+                      {
+                        "status": "loggedin",
+                        "label": "Submenu item 2",
+                        "link": "form.form3",
+                        "menus": [
+                          {
+                            "role": [
+                              "ne_moze"
+                            ],
+                            "label": "Submenu item 3",
+                            "link": "extern.http://google.com"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              "main-right": {
+                "class": "navbar-right",
+                "menus": [
+                  {
+                    "status": "loggedout",
+                    "label": "Login",
+                    "link": "form.login",
+                    "args": {
+                      "config": {
+                        "content": "sta je?"
+                      }
+                    }
+                  },
+                  {
+                    "status": "loggedin",
+                    "label": "Logout",
+                    "link": "ftion.logout"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "css": [
+        {
+          "component": "bootstrap",
+          "path": "dist/css",
+          "min": "bootstrap.min.css",
+          "devel": "bootstrap.css"
+        },
+        {
+          "component": "components-font-awesome",
+          "path": "css",
+          "devel": "font-awesome.css"
+        },
+        {
+          "component": "angular.lib",
+          "path": "css/",
+          "devel": "forms.css"
+        },
+        {
+          "component": "angular.lib",
+          "path": "css/",
+          "devel": "menu.css"
+        },
+        "generic.css",
+        "overrides.css"
+      ],
+      "js": [
+        {
+          "component": "jquery",
+          "path": "dist/",
+          "min": "jquery.min.js",
+          "devel": "jquery.js"
+        },
+        {
+          "component": "allex",
+          "path": "dist/",
+          "min": "browserified.js",
+          "devel": "browserified.js"
+        },
+        {
+          "component": "angular",
+          "min": "angular.min.js",
+          "devel": "angular.js"
+        },
+        {
+          "component": "bootstrap",
+          "path": "dist/js/",
+          "min": "bootstrap.min.js",
+          "devel": "bootstrap.js"
+        },
+        {
+          "component": "angular-bootstrap",
+          "min": "ui-bootstrap-tpls.min.js",
+          "devel": "ui-bootstrap-tpls.js"
+        },
+        {
+          "component": "angular-ui-router",
+          "path": "release/",
+          "min": "angular-ui-router.js",
+          "devel": "angular-ui-router.min.js"
+        },
+        {
+          "component": "angular.lib",
+          "path": "templates",
+          "devel": "config.js",
+          "min": "config.js"
+        },
+        {
+          "component": "angular.lib",
+          "path": "dist",
+          "devel": "config.js",
+          "min": "config.min.js"
+        },
+        "index_menu.js",
+        {
+          "component": "angular.lib",
+          "path": "dist",
+          "devel": "lib.js",
+          "min": "lib.min.js"
+        },
+        "boot.js"
+      ]
+    }
+  },
+  "components": {
+    "bootstrap": {
+      "files": [
+        "dist/**"
+      ]
+    },
+    "jquery": {
+      "files": [
+        "dist/**"
+      ]
+    },
+    "components-font-awesome": {
+      "files": [
+        "css/*",
+        "fonts/*"
+      ]
+    },
+    "allex": {
+      "files": [
+        "dist/**"
+      ]
+    },
+    "angular": {
+      "files": [
+        "**"
+      ]
+    },
+    "angular-bootstrap": {
+      "files": [
+        "**"
+      ]
+    },
+    "angular-ui-router": {
+      "files": [
+        "release/*"
+      ]
+    },
+    "angular.lib": {
+      "files": [
+        "css/**",
+        "dist/**",
+        "templates/**"
+      ]
+    }
+  },
+  "partials": [
+    {
+      "component": "angular.lib",
+      "path": "templates/form_template.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/username_based_login_form.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/form_builder_generic.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/busy_widget.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/busy_item.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/progress.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/menutemplate.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/usermenu.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/menuitem.html"
+    },
+    {
+      "component": "angular.lib",
+      "path": "templates/submenuitem.html"
+    }
+  ],
+  "protoboard": {
+    "role": "web_app",
+    "include_components": [
+      "../web_component"
+    ]
+  }
+}

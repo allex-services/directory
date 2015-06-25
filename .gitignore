@@ -1,3 +1,9 @@
 node_modules/*
 *.swp
 *.swo
+.allexlanmanger/*
+test_site/node_modules/*
+test_site/_components/*
+test_site/components/*
+test_site/_generated/*
+test_site/.webapp_build.log
