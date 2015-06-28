@@ -11,13 +11,23 @@ function pathForFilename(path,filename){
   satisfyPath(Path.dirname(ret));
   return ret;
 }
-function fileSize(filepath){
-  try{
-    var fstats = fs.lstatSync(filepath);
-    return fstats.size;
-  }
-  catch(e){
-    return 0;
+function fileSize(filepath,defer){
+  if(defer){
+    fs.lstat(filepath,function(err,fstats){
+      if(err){
+        defer.resolve(0);
+      }else{
+        defer.resolve(fstats.size);
+      }
+    });
+  }else{
+    try{
+      var fstats = fs.lstatSync(filepath);
+      return fstats.size;
+    }
+    catch(e){
+      return 0;
+    }
   }
 }
 

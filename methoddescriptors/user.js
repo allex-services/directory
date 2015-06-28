@@ -23,12 +23,5 @@ module.exports = {
     type: 'object'
   },
   true
-  ],
-  parse: [{
-    title: 'parser module name',
-    type: 'string',
-  },{
-    title: 'filename',
-    type: 'string'
-  }]
+  ]
 };

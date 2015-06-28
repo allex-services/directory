@@ -6,15 +6,14 @@ function createTransmitFileTask(execlib){
       execSuite = execlib.execSuite,
       SinkTask = execSuite.SinkTask,
       taskRegistry = execSuite.taskRegistry,
-      util = require('../util')(execlib);
+      util = require('../fileapi/util')(execlib);
   function TransmitFileTask(prophash){
     SinkTask.call(this,prophash);
     this.sink = prophash.sink;
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
     this.parsermodulename = prophash.parsermodulename;
-    this.onRecord = prophash.onRecord;
-    this.onInvalidRecord = prophash.onInvalidRecord;
+    this.cb = prophash.cb;
     this.deleteonsuccess = prophash.deleteonsuccess || false;
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
     this.file = null;
@@ -24,6 +23,9 @@ function createTransmitFileTask(execlib){
   }
   lib.inherit(TransmitFileTask,SinkTask);
   TransmitFileTask.prototype.__cleanUp = function(){
+    if(this.cb){
+      this.cb(this.succeeded);
+    }
     if(this.file){
       fs.closeSync(this.file);
       if(this.succeeded && this.deleteonsuccess){
@@ -100,7 +102,7 @@ function createTransmitFileTask(execlib){
       }
     }
   };
-  TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'/*,'onRecord','onInvalidRecord'*/];
+  TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
   return TransmitFileTask;
 }
 

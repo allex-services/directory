@@ -7,7 +7,7 @@ function createDirectoryService(execlib,ParentServicePack){
     q = lib.q,
     execSuite = execlib.execSuite,
     parserRegistry = execSuite.parserRegistry,
-    util = require('./util')(execlib);
+    fileApi = require('./fileapi/creator')(execlib);
 
   function factoryCreator(parentFactory){
     return {
@@ -22,8 +22,9 @@ function createDirectoryService(execlib,ParentServicePack){
     if(!('path' in prophash)){
       throw new lib.Error('propertyhash misses the path field');
     }
-    util.satisfyPath(prophash.path);
+    fileApi.util.satisfyPath(prophash.path);
     this.state.set('path',prophash.path);
+    this.db = new (fileApi.DataBase)(prophash.path);
   }
   ParentService.inherit(DirectoryService,factoryCreator);
   DirectoryService.prototype.__cleanUp = function(){
@@ -34,6 +35,7 @@ function createDirectoryService(execlib,ParentServicePack){
     this.parser = null;
     ParentService.prototype.__cleanUp.call(this);
   };
+  /*
   DirectoryService.prototype.pathForFilename = function(filename){
     return util.pathForFilename(this.state.get('path'),filename);
   };
@@ -60,6 +62,7 @@ function createDirectoryService(execlib,ParentServicePack){
       defer.reject.bind(defer)
     );
   };
+  */
   
   return DirectoryService;
 }
