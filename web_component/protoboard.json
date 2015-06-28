@@ -1,0 +1,24 @@
+{
+  "js": {
+    "all": []
+  },
+  "css": {},
+  "browserify": {
+    "browserified.js": "../browserify.js"
+  },
+  "protoboard": {
+    "web_app": {
+      "files": [
+        "dist/**",
+        "css/**",
+        "partials/**"
+      ]
+    },
+    "role": "web_component"
+  },
+  "exclude": {
+    "jshint": [
+      "browserified.js"
+    ]
+  }
+}
