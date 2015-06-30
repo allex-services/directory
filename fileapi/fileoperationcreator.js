@@ -46,8 +46,6 @@ function createFileOperation(execlib) {
     if(!this.defer){
       return;
     }
-    this.result = this.result || 0;
-    this.result ++;
     this.defer.notify(obj);
   };
   FileOperation.prototype.fail = function(reason){

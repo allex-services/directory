@@ -87,17 +87,6 @@ function createHandler(execlib, util) {
     this.closingDefer = null;
     lib.Map.prototype.destroy.call(this);
   };
-  /*
-  FileDataBase.prototype.add = function (name) {
-    if(this.closingDefer){
-      return null;
-    }
-    if (!name) {
-      return null;
-    }
-    return this.fileQ(name);
-  };
-  */
   FileDataBase.prototype.read = function (name, options, defer) {
     if(this.closingDefer){
       if(defer){

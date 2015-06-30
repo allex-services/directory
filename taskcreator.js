@@ -6,6 +6,9 @@ function createTasks(execlib){
   },{
     name: 'transmitFile',
     klass: require('./tasks/transmitFile')(execlib)
+  },{
+    name: 'downloadFile',
+    klass: require('./tasks/downloadFile')(execlib)
   }];
 }
 

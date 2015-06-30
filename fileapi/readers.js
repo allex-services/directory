@@ -15,29 +15,57 @@ function createReaders(execlib,FileOperation,util) {
     return d.promise;
   };
 
-  FileReader.prototype.readWhole = function () {
-    var d = q.defer();
-    this.size().done(this.onSizeForReadWhole.bind(this,d));
-    return d.promise;
+  FileReader.prototype.read = function (startfrom, quantityorbuffer, defer) {
+    var size, buffer;
+    if(quantityorbuffer instanceof Buffer){
+      buffer = quantityorbuffer;
+      size = buffer.length;
+    }
+    if ('number' === typeof quantityorbuffer) {
+      size = quantityorbuffer;
+      buffer = new Buffer(size);
+    }
+    if(!buffer){
+      return this.readWhole(startfrom, defer);
+    }
+    defer = defer || q.defer();
+    if(!('number' === typeof startfrom || startfrom instanceof Number)) {
+      startfrom = null;
+    }
+    fs.read(this.fh, buffer, 0, size, startfrom, this._onBufferRead.bind(this, defer));
+    return defer.promise;
   };
-  FileReader.prototype.onSizeForReadWhole = function (defer, size) { 
+  FileReader.prototype._onBufferRead = function (defer, err, bytesread, buffer) {
+    if (err) {
+      defer.reject(err);
+      this.fail(err);
+      return;
+    }
+    if (bytesread !== buffer.length) {
+      defer.notify(buffer.slice(0, bytesread));
+    } else {
+      defer.notify(buffer);
+    }
+    defer.resolve(bytesread);
+  };
+
+  FileReader.prototype.readWhole = function (startfrom, defer) {
+    defer = defer || q.defer();
+    this.size().done(this.onSizeForReadWhole.bind(this, startfrom, defer));
+    return defer.promise;
+  };
+  FileReader.prototype.onSizeForReadWhole = function (startfrom, defer, size) { 
     if(!this.openDefer){
       defer.reject(new lib.Error('ALREADY_CLOSED','File is already closed'));
       return;
     }
-    this.openDefer.promise.then(this.onOpenWithSizeForReadWhole.bind(this, defer, size));
+    this.openDefer.promise.then(this.onOpenWithSizeForReadWhole.bind(this, startfrom, defer, size));
     this.open();
   };
-  FileReader.prototype.onOpenWithSizeForReadWhole = function (defer, size) {
-    fs.read(this.fh, new Buffer(size), 0, size, null, this._onWholeRead.bind(this,defer));
+  FileReader.prototype.onOpenWithSizeForReadWhole = function (startfrom, defer, size) {
+    this.read(startfrom, size, defer);
   };
-  FileReader.prototype._onWholeRead = function (defer, err, bytesread, buff) {
-    if(err){
-      this.fail(err);
-    }else{
-      defer.resolve(buff);
-    }
-  };
+
   FileReader.prototype.readInFixedChunks = function (recordsize, processfn) {
     this.size().done(this.onSizeForFixedChunks.bind(this, recordsize, processfn));
   };
@@ -66,15 +94,13 @@ function createReaders(execlib,FileOperation,util) {
   }
   lib.inherit(FileTransmitter,FileReader);
 
-  function ParsedFileReader(name, path, parsermodulename, parserpropertyhash, defer) {
+  function ParsedFileReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
-    this.modulename = parsermodulename;
-    this.prophash = parserpropertyhash;
+    this.options = options;
   }
   lib.inherit(ParsedFileReader,FileReader);
   ParsedFileReader.prototype.destroy = function () {
-    this.prophash = null;
-    this.modulename = null;
+    this.options = null;
     FileReader.prototype.destroy.call(this);
   };
   ParsedFileReader.prototype.go = function () {
@@ -82,9 +108,9 @@ function createReaders(execlib,FileOperation,util) {
       return;
     }
     this.active = true;
-    if(this.modulename === '*'){
+    if(this.options.modulename === '*'){
     }else{
-      execlib.execSuite.parserRegistry.spawn(this.modulename, this.prophash).done(
+      execlib.execSuite.parserRegistry.spawn(this.options.modulename, this.options.prophash).done(
         this.onParser.bind(this),
         this.fail.bind(this)
       );
@@ -92,15 +118,24 @@ function createReaders(execlib,FileOperation,util) {
   };
   ParsedFileReader.prototype.onParser = function (parser) {
     if(lib.defined(parser.recordDelimiter)){
-      var tord = typeof parser.recordDelimiter;
+      var delim = parser.recordDelimiter, tord = typeof delim, start, quantity;
       if ('number' === tord) {
-        this.readInFixedChunks(parser.recordDelimiter, this.onRecordRead.bind(this, parser));
+        if (!(this.options && this.options.raw)) {
+          this.readInFixedChunks(delim, this.onRecordRead.bind(this, parser));
+        } else {
+          start = this.options.hasOwnProperty('startfrom') ? this.options.startfrom * delim : null;
+          quantity = this.options.hasOwnProperty('quantity') ? this.options.quantity * delim : null;
+          this.openDefer.promise.then(this.onOpenForRawRead.bind(this, start, quantity));
+          this.open();
+        }
       }
     }else{
-      this.readWhole().done(this.onWholeRead.bind(this, parser));
+      this.readWhole().done(
+        this.onWholeReadDone.bind(this, parser),
+        this.fail.bind(this),
+        this.onWholeReadData.bind(this, parser)
+      );
     }
-  };
-  ParsedFileReader.prototype.onFinished = function (parser) {
   };
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
     var d, rec;
@@ -120,15 +155,30 @@ function createReaders(execlib,FileOperation,util) {
     d.resolve(rec);
     return d.promise;
   };
-  ParsedFileReader.prototype.onWholeRead = function (parser, buff) {
-    this.result = parser.fileToData(buff);
+  ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
+    this.read(start, quantity).done(
+      this.onRawReadDone.bind(this),
+      this.fail.bind(this),
+      this.notify.bind(this)
+    );
+  };
+  ParsedFileReader.prototype.onWholeReadDone = function (parser, bytesread) {
+    parser.destroy();
     this.close();
+  };
+  ParsedFileReader.prototype.onRawReadDone = function (bytesread) {
+    this.result = bytesread;
+    this.close();
+  };
+  ParsedFileReader.prototype.onWholeReadData = function (parser, buff) {
+    this.result = parser.fileToData(buff);
   };
 
 
   function readerFactory(name, path, options, defer) {
+    console.log('readerFactory',options);
     if(options.modulename){
-      return new ParsedFileReader(name, path, options.modulename, options.propertyhash, defer);
+      return new ParsedFileReader(name, path, options, defer);
     }
   }
 

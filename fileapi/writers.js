@@ -32,9 +32,8 @@ function createWriters(execlib,FileOperation) {
     this.active = true;
     this.open();
   };
-  FileWriter.prototype.write = function (chunk, defer, writtenobj) {
+  FileWriter.prototype.write = function (chunk, defer) {
     defer = defer || q.defer();
-    writtenobj = writtenobj || {written:0};
     if(this.isopen === false){
       defer.reject(new lib.Error('NOT_OPEN',this.name+' is not opened yet'));
       return defer.promise;
@@ -47,16 +46,18 @@ function createWriters(execlib,FileOperation) {
       this.q.push([chunk, defer]);
     }else{
       this.iswriting = true;
-      if(chunk instanceof Buffer){
-        fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this,defer, writtenobj));
-      }else{
-        fs.write(this.fh, chunk, null, 'utf8', this.onStringWritten.bind(this,defer, writtenobj));
-      }
+      this._performWriting(chunk, defer, {written:0});
     }
     return defer.promise;
   };
+  FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
+    if(chunk instanceof Buffer){
+      fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this,defer, writtenobj));
+    }else{
+      fs.write(this.fh, chunk, null, 'utf8', this.onStringWritten.bind(this,defer, writtenobj));
+    }
+  };
   FileWriter.prototype.onBufferWritten = function (defer, writtenobj, err, written, buffer) {
-    this.iswriting = false;
     if (err) {
       defer.reject(err);
       this.fail(err);
@@ -65,7 +66,7 @@ function createWriters(execlib,FileOperation) {
       if (written === buffer.length) {
         this.finishWriting(defer, writtenobj.written);
       } else {
-        this.write(buffer.slice(written), defer);
+        this._performWriting(buffer.slice(written), defer, writtenobj);
       }
     }
   };
@@ -78,10 +79,12 @@ function createWriters(execlib,FileOperation) {
     }
   };
   FileWriter.prototype.finishWriting = function (defer, writtenbytes) {
+    this.iswriting = false;
     defer.resolve(writtenbytes);
     var pending = this.q.pop();
     if(pending){
-      this.write(pending[0],pending[1]);
+      this.iswriting = true;
+      this._performWriting(pending[0],pending[1],{written:0});
     }
   };
 
@@ -98,7 +101,6 @@ function createWriters(execlib,FileOperation) {
     return defer.promise;
   };
   RawFileWriter.prototype.onWritten = function (bytes) {
-    console.log('written', bytes, 'bytes');
     this.result += bytes;
   };
 
