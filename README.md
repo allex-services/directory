@@ -42,4 +42,4 @@ For large data payloads, use the 'transmitFile' task provided by the
 For smaller files (or smaller payloads, like "_record by record_" mode), use the
 'readFile' task provided by the `DirectoryService`.
 
-For larger files, use the 'receiveFile' task provided by the `DirectoryService`.
+For larger files, use the 'downloadFile' task provided by the `DirectoryService`.
