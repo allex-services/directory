@@ -7,6 +7,7 @@ function parserRegistryIntroducer(execlib){
   if(parserRegistry){
     return;
   }
+  /*
   function ParserRegistry(){
     lib.Map.call(this);
   }
@@ -58,7 +59,8 @@ function parserRegistryIntroducer(execlib){
       defer.reject(error);
     }
   };
-  execSuite.parserRegistry = new ParserRegistry();
+  */
+  execSuite.parserRegistry = new execSuite.RegistryBase();
 }
 
 module.exports = parserRegistryIntroducer;
