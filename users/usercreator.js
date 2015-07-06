@@ -39,7 +39,7 @@ function createUser(execlib,ParentUser){
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
   FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
-    console.log('processTransmissionPacket',buffer);
+    //console.log('processTransmissionPacket',buffer);
     if(!this.options){
       this.closeAllAndDie(server,connection);
     }else{
@@ -47,7 +47,7 @@ function createUser(execlib,ParentUser){
     }
   };
   FileUploadServer.prototype.onPacketWritten = function () {
-    console.log('packet written', this.options.writer.result);
+    //console.log('packet written', this.options.writer.result);
     this.user.state.set(this.uploadpath, this.options.writer.result);
   };
   FileUploadServer.prototype.onTransmissionDone = function(){
@@ -214,9 +214,7 @@ function createUser(execlib,ParentUser){
       defer.reject(new lib.Error('WILL_NOT_WRITE_EMPTY_FILE','fs touch not supported'));
       return;
     }
-    console.log('write',data);
     this.__service.db.write(filename, parserinfo, defer).then(function(writer){
-      console.log('about to write all',data,'to',writer);
       writer.writeAll(data);
     });
   };

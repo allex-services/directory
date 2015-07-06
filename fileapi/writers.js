@@ -52,9 +52,9 @@ function createWriters(execlib,FileOperation) {
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
     if(chunk instanceof Buffer){
-      fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this,defer, writtenobj));
+      fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
-      fs.write(this.fh, chunk, null, 'utf8', this.onStringWritten.bind(this,defer, writtenobj));
+      fs.write(this.fh, chunk, null, 'utf8', this.onStringWritten.bind(this, defer));
     }
   };
   FileWriter.prototype.onBufferWritten = function (defer, writtenobj, err, written, buffer) {
