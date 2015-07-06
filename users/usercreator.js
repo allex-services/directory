@@ -4,72 +4,124 @@ function createUser(execlib,ParentUser){
   'use strict';
   var lib = execlib.lib,
     q = lib.q,
-    execSuite = execlib.execSuite,
-    parserRegistry = execSuite.parserRegistry,
-    ParserMechanics = require('./parsermechanics')(execlib);
+    execSuite = execlib.execSuite;
 
   if(!ParentUser){
     ParentUser = execSuite.ServicePack.Service.prototype.userFactory.get('user');
   }
 
-  function FileTransmissionServer(user,options){
+  function FileUploadServer(user,options){
     ParentUser.prototype.TcpTransmissionServer.call(this,user,options);
+    if (!options.writer) {
+      throw new lib.Error('NO_WRITER_READY_FOR_FILE_TRANSMISSION');
+    }
     if(!options.filename){
       throw new lib.Error('NO_FILENAME_SPECIFIED_FOR_UPLOAD');
     }
     this.uploadpath = ['uploads',this.options.filename];
-    this.file = null;
     this.written = 0;
-    this.openFile();
+    this.options.writer.defer.promise.then(
+      this.destroy.bind(this),
+      this.destroy.bind(this)
+    );
   }
-  lib.inherit(FileTransmissionServer,ParentUser.prototype.TcpTransmissionServer);
-  FileTransmissionServer.prototype.destroy = function(){
-    this.user.__service.state.remove(this.uploadpath);
+  lib.inherit(FileUploadServer,ParentUser.prototype.TcpTransmissionServer);
+  FileUploadServer.prototype.destroy = function(){
+    if(this.uploadpath && this.user && this.user.__service){
+      this.user.__service.state.remove(this.uploadpath);
+    }
     this.written = null;
-    if(this.file){
+    if(this.options){
       this.onTransmissionDone();
       return;
     }
-    this.file = null;
     this.uploadpath = null;
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
-  FileTransmissionServer.prototype.start = function(defer){
-    if(!this.file){
-      lib.runNext(this.start.bind(this),1000);
-    }else{
-      ParentUser.prototype.TcpTransmissionServer.prototype.start.call(this,defer);
-    }
-  };
-  FileTransmissionServer.prototype.processTransmissionPacket = function(server,connection,buffer){
-    if(!this.file){
+  FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
+    console.log('processTransmissionPacket',buffer);
+    if(!this.options){
       this.closeAllAndDie(server,connection);
     }else{
-      this.written += fs.writeSync(this.file,buffer,0,buffer.length);
-      this.user.state.set(this.uploadpath,this.written);
+      this.options.writer.write(buffer).done(this.onPacketWritten.bind(this));
     }
   };
-  FileTransmissionServer.prototype.openFile = function(){
-    if(!this.file){
-      try{
-        this.file = fs.openSync(this.user.__service.pathForFilename(this.options.filename),'w');
-        this.user.set(this.uploadpath,0);
-      }catch(e){
-        console.log(e);
-        //looking for a "too many open files" error to retry
-        //lib.runNext(this.openFile.bind(this),1000);
-        //otherwise, bail out
-        //for now, bail out
-        this.destroy();
-      }
+  FileUploadServer.prototype.onPacketWritten = function () {
+    console.log('packet written', this.options.writer.result);
+    this.user.state.set(this.uploadpath, this.options.writer.result);
+  };
+  FileUploadServer.prototype.onTransmissionDone = function(){
+    this.options.writer.close();
+  };
+
+  function FileDownloadServer(user, options){
+    ParentUser.prototype.TcpTransmissionServer.call(this, user, options);
+    this.freetowrite = false;
+    this.readPromise = true;
+    this.q = new lib.Fifo();
+  }
+  lib.inherit(FileDownloadServer, ParentUser.prototype.TcpTransmissionServer);
+  FileDownloadServer.prototype.destroy = function () {
+    if(this.readPromise){
+      return;
+    }
+    console.log('my q',this.q);
+    if(this.q && this.q.length){
+      console.log("Can't die yet,",this.q.length,'items still in q');
+      return;
+    }
+    if(this.freetowrite === null){
+      return;
+    }
+    this.q.destroy();
+    this.q = null;
+    this.freetowrite = null;
+    ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
+  };
+  FileDownloadServer.prototype.clearToSend = function (server, connection) {
+    if(!this.q){
+      return;
+    }
+    console.log('clearing freetowrite', this.q.length, 'items still in q');
+    this.freetowrite = true;
+    var next = this.q.pop();
+    if(next){
+      this.send(server, connection, next);
     }
   };
-  FileTransmissionServer.prototype.onTransmissionDone = function(){
-    fs.closeSync(this.file);
-    console.log('closed',this.file);
-    this.file = null;
-    this.destroy();
+  FileDownloadServer.prototype.onConnection = function (server, connection) {
+    console.log('client connected for download');
+    if(this.readPromise && this.readPromise!==true){
+      return;
+    }
+    ParentUser.prototype.TcpTransmissionServer.prototype.onConnection.call(this, server, connection);
+    this.readPromise = this.user.__service.db.read(this.options.filename, this.options);
+    this.freetowrite = true;
+    this.readPromise.done(
+      this.readOver.bind(this, server, connection),
+      this.readOver.bind(this, server, connection),
+      this.sendPacket.bind(this, server, connection)
+    );
+    console.log('readPromise set');
   };
+  FileDownloadServer.prototype.readOver = function (server, connection) {
+    this.readPromise = null;
+    this.closeAllAndDie(server, connection);
+  };
+  FileDownloadServer.prototype.sendPacket = function (server, connection, packet) {
+    console.log('sendPacket',this,packet);
+    if(!this.q){
+      console.error('Y ME DED?');
+      return;
+    }
+    if(!this.freetowrite){
+      this.q.push(packet);
+      return;
+    }
+    console.log('should send',packet,'on download');
+    this.freetowrite = connection.write(packet, this.clearToSend.bind(this, server, connection));
+  };
+
 
   function User(prophash){
     ParentUser.call(this,prophash);
@@ -81,9 +133,6 @@ function createUser(execlib,ParentUser){
     this.waitinguploads.destroy();
     this.waitinguploads = null;
     ParentUser.prototype.__cleanUp.call(this);
-  };
-  User.prototype._waitForUpload = function(options,defer){
-    var filename = options.filename;
   };
   User.prototype._checkOnWaitingUploads = function(options,defer){
     var filename = options.filename,
@@ -109,7 +158,14 @@ function createUser(execlib,ParentUser){
     }
     this.__service.state.set(uploadpath,true);
   };
-  User.prototype.requestTcpTransmission = function(options,defer){
+  User.prototype.requestTcpTransmission = function (options, defer) {
+    if (options.download){
+      this.requestDownload(options,defer);
+    }else{
+      this.requestUpload(options,defer);
+    }
+  };
+  User.prototype.requestUpload = function (options, defer) {
     if(!options.filename){
       //for now, reject. If DirectoryService User finds out how to 
       //handle other transmission scenarios, continue from here.
@@ -120,56 +176,49 @@ function createUser(execlib,ParentUser){
       defer.reject(new lib.Error('NO_FILESIZE_SPECIFIED_FOR_UPLOAD','filesize missing in requestTcpTransmission options'));
       return;
     }
-    if(options.parsermodulename){
-      parserRegistry.register(options.parsermodulename);
-    }
     if(this._checkOnWaitingUploads(options,defer)){
       return;
     }
     if(this._checkOnServiceUploads(options,defer)){
       return;
     }
-    ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
-  };
-  User.prototype.fetch = function(filename,parserinfo,defer){
-    try{
-    var fn = this.__service.pathForFilename(filename);
-    this.__service.fileToData(
-      parserinfo,
-      fs.readFileSync(fn),
-      defer
+    var writedefer = q.defer();
+    this.__service.db.write(options.filename, {}, writedefer).done(
+      this.onUploadReady.bind(this, options, defer, writedefer),
+      defer.reject.bind(defer)
     );
-    }
-    catch(e){
-      defer.reject(e);
-    }
+    //ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
-  User.prototype.write = function(filename,parserinfo,data,defer){
-    var service = this.__service, fn = service.pathForFilename(filename);
-    if(data===null){
-      try{
-        fs.closeSync(fs.openSync(fn,'w'));
-        defer.resolve({filesize:service.fileSize(filename)});
-      }
-      catch(e){
-        console.log(e);
-        defer.reject(e);
-      }
-    }else{
-      try{
-        this.__service.dataToFile(parserinfo,data).done(
-          function(filedata){
-            fs.writeFileSync(fn,filedata);
-            defer.resolve({filesize:service.fileSize(filename)});
-          },
-          defer.reject.bind(defer)
-        );
-      }
-      catch(e){
-        console.log(e);
-        defer.reject(e);
-      }
+  User.prototype.onUploadReady = function (options, requestdefer, writedefer, writer) {
+    options.writer = writer;
+    options.serverCtor = FileUploadServer;
+    ParentUser.prototype.requestTcpTransmission.call(this, options, requestdefer);
+  };
+  User.prototype.requestDownload = function (options, defer) {
+    if(!options.filename){
+      //for now, reject. If DirectoryService User finds out how to 
+      //handle other transmission scenarios, continue from here.
+      defer.reject(new lib.Error('NO_FILENAME_SPECIFIED_FOR_DOWNLOAD','filename missing in requestTcpTransmission options'));
+      return;
     }
+    options.serverCtor = FileDownloadServer;
+    options.raw = true;
+    ParentUser.prototype.requestTcpTransmission.call(this, options, defer);
+  };
+  User.prototype.fetch = function (filename, options, defer) {
+    this.__service.db.read(filename, options, defer);
+  };
+  User.prototype.write = function (filename, parserinfo, data, defer) {
+    if(data===null){
+      console.log('Y data null?');
+      defer.reject(new lib.Error('WILL_NOT_WRITE_EMPTY_FILE','fs touch not supported'));
+      return;
+    }
+    console.log('write',data);
+    this.__service.db.write(filename, parserinfo, defer).then(function(writer){
+      console.log('about to write all',data,'to',writer);
+      writer.writeAll(data);
+    });
   };
   User.prototype.append = function(filename,data,defer){
     try{
@@ -181,16 +230,6 @@ function createUser(execlib,ParentUser){
       defer.reject(e);
     }
   };
-  User.prototype.parse = function(parsermodulename,filename,defer){
-    var fn = this.__service.pathForFilename(filename);
-    parserRegistry.spawn(parsermodulename).done(
-      function(parser){
-        new ParserMechanics(parser,fn,defer);
-      },
-      defer.reject.bind(defer)
-    );
-  };
-  User.prototype.TcpTransmissionServer = FileTransmissionServer;
 
   return User;
 }

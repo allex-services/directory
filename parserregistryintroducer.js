@@ -7,30 +7,40 @@ function parserRegistryIntroducer(execlib){
   if(parserRegistry){
     return;
   }
+  /*
   function ParserRegistry(){
     lib.Map.call(this);
   }
   lib.inherit(ParserRegistry,lib.Map);
   ParserRegistry.prototype.register = function (modulename,defer) {
-    var d = defer || q.defer();
+    defer = defer || q.defer();
     try{
       var parserctor = this.get(modulename);
       if(!parserctor){
         parserctor = require(modulename)(execlib);
-        this.add(modulename,parserctor);
+        if('function' === typeof parserctor.done){
+          parserctor.done(this.finalizeRegister.bind(this, modulename, defer));
+        }else{
+          this.finalizeRegister(modulename, defer, parserctor);
+        }
+      } else {
+        defer.resolve(parserctor);
       }
-      d.resolve(parserctor);
     }
     catch(e){
       if(execSuite.installFromError){
-        execSuite.installFromError(this.onInstallFromError.bind(this,modulename,d,e),e);
+        execSuite.installFromError(this.onInstallFromError.bind(this,modulename,defer,e),e);
       }else{
         console.log(e.stack);
         console.log(e);
-        d.reject(e);
+        defer.reject(e);
       }
     }
-    return d.promise;
+    return defer.promise;
+  };
+  ParserRegistry.prototype.finalizeRegister = function (modulename, defer, parserctor) {
+    this.add(modulename, parserctor);
+    defer.resolve(parserctor);
   };
   ParserRegistry.prototype.spawn = function (modulename, prophash) {
     var d = q.defer();
@@ -49,7 +59,8 @@ function parserRegistryIntroducer(execlib){
       defer.reject(error);
     }
   };
-  execSuite.parserRegistry = new ParserRegistry();
+  */
+  execSuite.parserRegistry = new execSuite.RegistryBase();
 }
 
 module.exports = parserRegistryIntroducer;

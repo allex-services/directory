@@ -6,15 +6,13 @@ function createTransmitFileTask(execlib){
       execSuite = execlib.execSuite,
       SinkTask = execSuite.SinkTask,
       taskRegistry = execSuite.taskRegistry,
-      util = require('../util')(execlib);
+      util = require('../fileapi/util')(execlib);
   function TransmitFileTask(prophash){
     SinkTask.call(this,prophash);
     this.sink = prophash.sink;
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
-    this.parsermodulename = prophash.parsermodulename;
-    this.onRecord = prophash.onRecord;
-    this.onInvalidRecord = prophash.onInvalidRecord;
+    this.cb = prophash.cb;
     this.deleteonsuccess = prophash.deleteonsuccess || false;
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
     this.file = null;
@@ -24,6 +22,9 @@ function createTransmitFileTask(execlib){
   }
   lib.inherit(TransmitFileTask,SinkTask);
   TransmitFileTask.prototype.__cleanUp = function(){
+    if(this.cb){
+      this.cb(this.succeeded);
+    }
     if(this.file){
       fs.closeSync(this.file);
       if(this.succeeded && this.deleteonsuccess){
@@ -55,13 +56,13 @@ function createTransmitFileTask(execlib){
       name: ['uploads',this.filename],
       cb: this.onWriteConfirmed.bind(this)
     });
+    console.log('sending filesize',this.filesize,'on filepath',this.filepath);
     taskRegistry.run('transmitTcp',{
       sink: this.sink,
       ipaddress: this.ipaddress,
       options: {
         filename: this.filename,
-        filesize: this.filesize,
-        parsermodulename: this.parsermodulename
+        filesize: this.filesize
       },
       onPayloadNeeded: this.readChunk.bind(this)
     });
@@ -85,22 +86,10 @@ function createTransmitFileTask(execlib){
   TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
     this.succeeded = confirmed === this.filesize;
     if(this.succeeded){
-      if(this.parsermodulename){
-        this.sink.call('parse',this.parsermodulename,this.filename).done(function(result){
-          console.log('result',result);
-        },
-        function(error){
-          console.error(error);
-        },
-        function(record){
-          console.log('record',record);
-        });
-      }else{
-        lib.runNext(this.destroy.bind(this));
-      }
+      lib.runNext(this.destroy.bind(this));
     }
   };
-  TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'/*,'onRecord','onInvalidRecord'*/];
+  TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
   return TransmitFileTask;
 }
 
