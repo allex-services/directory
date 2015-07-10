@@ -228,6 +228,10 @@ function createUser(execlib,ParentUser){
       defer.reject(e);
     }
   };
+  User.prototype.traverse = function (dirname, options, defer) {
+    options.traverse = true;
+    this.__service.db.read(dirname, options, defer);
+  };
 
   return User;
 }

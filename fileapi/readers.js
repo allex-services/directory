@@ -1,4 +1,5 @@
-var fs = require('fs');
+var fs = require('fs'),
+  Path = require('path');
 
 function createReaders(execlib,FileOperation,util) {
   'use strict';
@@ -9,11 +10,6 @@ function createReaders(execlib,FileOperation,util) {
     FileOperation.call(this, name, path, defer);
   }
   lib.inherit(FileReader,FileOperation);
-  FileReader.prototype.size = function () {
-    var d = q.defer();
-    util.fileSize(this.path,d);
-    return d.promise;
-  };
 
   FileReader.prototype.read = function (startfrom, quantityorbuffer, defer) {
     var size, buffer;
@@ -174,11 +170,79 @@ function createReaders(execlib,FileOperation,util) {
     this.result = parser.fileToData(buff);
   };
 
+  function DirReader(name, path, options, defer) {
+    FileReader.call(this, name, path, defer);
+    this.options = options;
+  }
+  lib.inherit(DirReader, FileReader);
+  DirReader.prototype.destroy = function () {
+    this.options = null;
+    FileReader.prototype.destroy.call(this);
+  };
+  DirReader.prototype.go = function () {
+    this.type().then(
+      this.onType.bind(this)
+    );
+  };
+  DirReader.prototype.onType = function(type){
+    if (type !== 'd') {
+      this.fail(new lib.Error('WRONG_FILE_TYPE',this.name+' is not a directory'));
+      return;
+    }
+    fs.readdir(this.path, this.onListing.bind(this));
+  };
+  DirReader.prototype.onListing = function (err, list) {
+    if (err) {
+      this.fail(err);
+    } else {
+      //list.forEach(this.defer.notify.bind(this.defer));
+      list.forEach(this.processFileName.bind(this));
+    }
+  };
+  DirReader.prototype.processFileName = function (filename) {
+    if(this.options.filestats){
+      fs.lstat(Path.join(this.path,filename), this.onFileStats.bind(this,filename));
+    } else {
+      this.defer.notify(filename);
+    }
+  };
+  DirReader.prototype.onFileStats = function (filename, err, fstats) {
+    var stats = {};
+    this.options.filestats.forEach(this.populateStats.bind(this,filename,fstats,stats));
+    this.defer.notify(stats);
+  };
+  DirReader.prototype.populateStats = function (filename, fstats, stats, statskey) {
+    var mn = 'extract_'+statskey, 
+      m = this[mn];
+    if ('function' !== typeof m){
+      console.log('Method',mn,'does not exist to populate',statskey,'of filestats');
+    } else {
+      stats[statskey] = m.call(this, filename, fstats);
+    }
+  };
+  DirReader.prototype.extract_filename = function (filename, fstats) {
+    return filename;
+  };
+  DirReader.prototype.extract_fileext = function (filename, fstats) {
+    return Path.extname(filename);
+  };
+  DirReader.prototype.extract_filetype = function (filename, fstats) {
+    return util.typeFromStats(fstats);
+  };
+  DirReader.prototype.extract_created = function (filename, fstats) {
+    return fstats.birthtime;
+  };
+  DirReader.prototype.extract_lastmodified = function (filename, fstats) {
+    return fstats.mtime;
+  };
+
 
   function readerFactory(name, path, options, defer) {
-    console.log('readerFactory',options);
     if(options.modulename){
       return new ParsedFileReader(name, path, options, defer);
+    }
+    if(options.traverse){
+      return new DirReader(name, path, options, defer);
     }
   }
 

@@ -1,5 +1,5 @@
 var fs = require('fs');
-function createFileOperation(execlib) {
+function createFileOperation(execlib, util) {
   'use strict';
   var lib = execlib.lib,
     q = lib.q;
@@ -41,6 +41,16 @@ function createFileOperation(execlib) {
     this.defer = null;
     this.path = null;
     this.name = null;
+  };
+  FileOperation.prototype.size = function () {
+    var d = q.defer();
+    util.fileSize(this.path,d);
+    return d.promise;
+  };
+  FileOperation.prototype.type = function () {
+    var d = q.defer();
+    util.fileType(this.path,d);
+    return d.promise;
   };
   FileOperation.prototype.notify = function(obj){
     if(!this.defer){
