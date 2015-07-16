@@ -6,3 +6,8 @@ test_site/_components/*
 test_site/components/*
 test_site/_generated/*
 test_site/.webapp_build.log
+_apps/*
+test_site/_app
+bower.json
+components
+test_site/_generated

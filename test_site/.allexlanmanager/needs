@@ -1,0 +1,29 @@
+[
+  {
+    "modulename": "allex_cdnservice",
+    "instancename": "Cdn",
+    "propertyhash": {
+      "path": "/home/veljko/work/allex-dev/allex/allex/node_modules/allex_directoryservice",
+      "webapp_suite": "test_site",
+      "port": 14000
+    }
+  },
+  {
+    "modulename": "allex_entrypointservice",
+    "instancename": "EntryPoint",
+    "propertyhash": {
+      "port": 8000,
+      "target": "instancename:Directory",
+      "strategies": {
+        "allpass": true
+      }
+    }
+  },
+  {
+    "modulename": "allex_directoryservice",
+    "instancename": "Directory",
+    "propertyhash": {
+      "path":""
+    }
+  }
+]

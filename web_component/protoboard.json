@@ -1,0 +1,20 @@
+{
+  "js": {
+    "all": [
+      "src/index.js"
+    ]
+  },
+  "css": {},
+  "browserify": {
+    "dist/browserified.js": "../browserify.js"
+  },
+  "protoboard": {
+    "role": "web_component",
+    "public_dirs":["dist", "css", "partials"]
+  },
+  "exclude": {
+    "jshint": [
+      "browserified.js"
+    ]
+  }
+}

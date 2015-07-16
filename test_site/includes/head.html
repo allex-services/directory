@@ -1,0 +1,43 @@
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  
+  <!-- TODO: -->
+  <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+  <meta name="keywords" content="node.js, express, mongoose, mongodb, angularjs, swig, ecosystem:protoboard">
+  <meta name="description" content="Protoboard WEB app">
+
+  <meta property="og:description" content="ProtoBoard WebApp stack">
+  <meta property="og:type" content="website">
+  {% if app %}
+  {% if app.facebook %}
+  <meta property="fb:app_id" content="APP_ID">
+  {% endif %}
+  {% if app.name %}
+  <title>{{app.name}}</title>
+  <meta property="og:title" content="{{app.name}} - {{app.title}}">
+  {% endif %}
+  {% if app.url %}
+  <meta property="og:url" content="{{app.url}}">
+  {% endif %}
+  {% if app.image %}
+  <meta property="og:image" content="{{app.logo}}">
+  {% endif %}
+  {% if app.site_name %}
+  <meta property="og:site_name" content="{{app.site_name}}">
+  {% endif %}
+  {% if app.admins %}
+  <meta property="fb:admins" content="{{app.admin}}">
+  {% endif %}
+  {% endif %}
+  {%- for style in css %}
+    <link rel="stylesheet" href="{{ style }}">
+  {%- endfor %}
+
+
+  <!--[if lt IE 9]>
+  <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+  <![endif]-->
+
+</head>

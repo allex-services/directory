@@ -1,0 +1,80 @@
+{
+  "jstemplates": [
+    {
+      "file": "connection.js",
+      "stringify": [
+        "connection"
+      ],
+      "from_file": {
+        "connection": "../connection_setup.json"
+      }
+    }
+  ],
+  "pages": {
+    "index": {
+      "jstemplates": [
+      ],
+      "css": [
+        {
+          "p": "components/bootstrap/dist/css",
+          "d": "bootstrap.css",
+          "m": "bootstrap.min.css"
+        },
+        "components/components-font-awesome/css/font-awesome.css",
+        "generic.css",
+        "overrides.css"
+      ],
+      "js": [
+        {
+          "p": "components/jquery/dist",
+          "d": "jquery.js",
+          "m": "jquery.min.js"
+        },
+        "components/allex/dist/browserified.js",
+        "components/allex_directoryservice/dist/browserified.js",
+        {
+          "p": "components/angular",
+          "d": "angular.js",
+          "m": "angular.min.js"
+        },
+        {
+          "p": "components/bootstrap/dist/js/",
+          "d": "bootstrap.js",
+          "m": "bootstrap.min.js"
+        },
+        {
+          "p": "components/angular-bootstrap",
+          "d": "ui-bootstrap-tpls.js",
+          "m": "ui-bootstrap-tpls.min.js"
+        },
+        {
+          "p": "components/angular-ui-router/release/",
+          "d": "angular-ui-router.js",
+          "m": "angular-ui-router.min.js"
+        },
+        "components/allex/dist/lib.js",
+        "components/allex/dist/vanila.js",
+        "components/allex_directoryservice/dist/all.js",
+        "boot.js"
+      ]
+    }
+  },
+  "partials": {
+    "components/allex/partials":[
+      "form.html",
+      "form_group.html",
+      "form_button.html",
+      "progress.html"
+    ],
+    "components/allex/vanila/partials":[
+      "login.html"
+    ],
+    "components/allex_directoryservice/partials": [
+      "upload.html"
+    ]
+  },
+  "protoboard": {
+    "role": "web_app",
+    "requires_connection": true
+  }
+}
