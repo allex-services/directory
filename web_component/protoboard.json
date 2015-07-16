@@ -10,7 +10,7 @@
   },
   "protoboard": {
     "role": "web_component",
-    "public_dirs":["dist", "css", "partials"]
+    "public_dirs":["dist", "partials"]
   },
   "exclude": {
     "jshint": [
