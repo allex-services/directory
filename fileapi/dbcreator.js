@@ -2,7 +2,7 @@ function createHandler(execlib, util) {
   'use strict';
   var lib = execlib.lib,
     q = lib.q,
-    FileOperation = require('./fileoperationcreator')(execlib),
+    FileOperation = require('./fileoperationcreator')(execlib,util),
     readerFactory = require('./readers')(execlib,FileOperation,util),
     writerFactory = require('./writers')(execlib,FileOperation);
 

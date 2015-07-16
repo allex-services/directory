@@ -23,5 +23,12 @@ module.exports = {
     type: 'object'
   },
   true
-  ]
+  ],
+  traverse: [{
+    title: 'Directory name',
+    type: 'string'
+  },{
+    title: 'Traverse options',
+    type: 'object'
+  }]
 };
