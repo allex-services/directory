@@ -47,7 +47,7 @@ function createUser(execlib,ParentUser){
     }
   };
   FileUploadServer.prototype.onPacketWritten = function () {
-    //console.log('packet written', this.options.writer.result);
+    console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
     this.user.state.set(this.uploadpath, this.options.writer.result);
   };
   FileUploadServer.prototype.onTransmissionDone = function(){

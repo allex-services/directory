@@ -34,9 +34,12 @@ function createTransmitFileTask(execlib){
     }
     this.buffer = null;
     this.succeeded = null;
+    this.filesize = null;
     this.file = null;
     this.filepath = null;
     this.deleteonsuccess = null;
+    this.cb = null;
+    this.remotefilename = null;
     this.filename = null;
     this.ipaddress = null;
     this.sink = null;
@@ -50,14 +53,14 @@ function createTransmitFileTask(execlib){
       return this.destroy();
     }
     this.file = filehandle;
+    try{
     taskRegistry.run('readState',{
       state: taskRegistry.run('materializeState',{
         sink: this.sink
       }),
-      name: ['uploads',this.filename],
+      name: ['uploads',this.remotefilename],
       cb: this.onWriteConfirmed.bind(this)
     });
-    console.log('sending filesize',this.filesize,'on filepath',this.filepath);
     taskRegistry.run('transmitTcp',{
       sink: this.sink,
       ipaddress: this.ipaddress,
@@ -67,6 +70,10 @@ function createTransmitFileTask(execlib){
       },
       onPayloadNeeded: this.readChunk.bind(this)
     });
+    } catch (e) {
+      console.error(e.stack);
+      console.error(e);
+    }
   };
   TransmitFileTask.prototype.readChunk = function(){
     if(!this.file){

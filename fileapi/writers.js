@@ -157,9 +157,22 @@ function createWriters(execlib,FileOperation) {
     this.close();
   };
 
+  function PerFileParsedFileWriter(name, path, parsermodulename, parserpropertyhash, defer) {
+    ParsedFileWriter.call(this,name, path, parsermodulename, parserpropertyhash, defer);
+  }
+  lib.inherit(PerFileParsedFileWriter, ParsedFileWriter);
+  PerFileParsedFileWriter.prototype.go = function () {
+    console.log('should write .parserinfo');
+    ParsedFileWriter.prototype.go.call(this);
+  };
+
   function writerFactory(name, path, options, defer) {
     if (options.modulename){
-      return new ParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
+      if (options.typed) {
+        return new ParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
+      } else {
+        return new PerFileParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
+      }
     }
     return new RawFileWriter(name, path, defer);
   }
