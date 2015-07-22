@@ -28,6 +28,7 @@ function createReaders(execlib,FileOperation,util) {
     if(!('number' === typeof startfrom || startfrom instanceof Number)) {
       startfrom = null;
     }
+    console.log('reading',size,'bytes for buffer of size', buffer.length);
     fs.read(this.fh, buffer, 0, size, startfrom, this._onBufferRead.bind(this, defer));
     return defer.promise;
   };
@@ -129,6 +130,11 @@ function createReaders(execlib,FileOperation,util) {
           this.open();
         }
       }
+      if (parser.recordDelimiter instanceof Buffer) {
+        console.log('time for readVariableLengthRecords', parser.recordDelimiter);
+        this.openDefer.promise.done(this.readVariableLengthRecords.bind(this, parser));
+        this.open();
+      }
     }else{
       this.readWhole().done(
         this.onWholeReadDone.bind(this, parser),
@@ -172,6 +178,17 @@ function createReaders(execlib,FileOperation,util) {
   };
   ParsedFileReader.prototype.onWholeReadData = function (parser, buff) {
     this.result = parser.fileToData(buff);
+  };
+  ParsedFileReader.prototype.readVariableLengthRecords = function (parser) {
+    var buff = new Buffer(1024);
+    this.read(0, buff).done(
+      this.onBufferReadForVariableLengthRecord.bind(this, parser, buff)
+     );
+  };
+  ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, bytesread) {
+    buff = buff.length === bytesread ? buff : buff.slice(0, bytesread);
+    var records = parser.fileToData(buff);
+    console.log('records', records);
   };
 
   function DirReader(name, path, options, defer) {
