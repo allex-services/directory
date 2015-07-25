@@ -28,7 +28,7 @@ function createReaders(execlib,FileOperation,util) {
     if(!('number' === typeof startfrom || startfrom instanceof Number)) {
       startfrom = null;
     }
-    console.log('reading',size,'bytes for buffer of size', buffer.length);
+    //console.log('reading',size,'bytes for buffer of size', buffer.length);
     fs.read(this.fh, buffer, 0, size, startfrom, this._onBufferRead.bind(this, defer));
     return defer.promise;
   };
@@ -131,8 +131,8 @@ function createReaders(execlib,FileOperation,util) {
         }
       }
       if (parser.recordDelimiter instanceof Buffer) {
-        console.log('time for readVariableLengthRecords', parser.recordDelimiter);
-        this.openDefer.promise.done(this.readVariableLengthRecords.bind(this, parser));
+        //console.log('time for readVariableLengthRecords', parser.recordDelimiter);
+        this.openDefer.promise.done(this.readVariableLengthRecords.bind(this, parser, {offset:0}));
         this.open();
       }
     }else{
@@ -179,16 +179,27 @@ function createReaders(execlib,FileOperation,util) {
   ParsedFileReader.prototype.onWholeReadData = function (parser, buff) {
     this.result = parser.fileToData(buff);
   };
-  ParsedFileReader.prototype.readVariableLengthRecords = function (parser) {
-    var buff = new Buffer(1024);
-    this.read(0, buff).done(
-      this.onBufferReadForVariableLengthRecord.bind(this, parser, buff)
+  ParsedFileReader.prototype.readVariableLengthRecords = function (parser, offsetobj) {
+    var buff = new Buffer(1050);
+    //console.log('reading with offset', offsetobj.offset);
+    this.read(offsetobj.offset, buff).done(
+      this.onBufferReadForVariableLengthRecord.bind(this, parser, buff, offsetobj)
      );
   };
-  ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, bytesread) {
+  ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, offsetobj, bytesread) {
+    //console.log('bytes read', bytesread);
+    if (!bytesread) {
+      this.result = offsetobj.offset;
+      this.close();
+      return;
+    }
     buff = buff.length === bytesread ? buff : buff.slice(0, bytesread);
     var records = parser.fileToData(buff);
-    console.log('records', records);
+    //console.log('records', records);
+    //console.log(records.length, 'records');
+    records.forEach(this.notify.bind(this));
+    offsetobj.offset+=bytesread;
+    this.readVariableLengthRecords(parser, offsetobj);
   };
 
   function DirReader(name, path, options, defer) {
