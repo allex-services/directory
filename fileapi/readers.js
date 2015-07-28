@@ -78,8 +78,15 @@ function createReaders(execlib,FileOperation,util) {
     fs.read(this.fh, buffer, 0, buffer.length, null, this.onChunkRead.bind(this, processfn));
   };
   FileReader.prototype.onChunkRead = function (processfn, err, bytesread, buffer) {
+    var processresult;
     if (bytesread === buffer.length) {
-      processfn(buffer).then(this.readChunk.bind(this, buffer, processfn));
+      processresult = processfn(buffer);
+      //attempt to support possible async parsing; for now the parsing is synchronous
+      if (processresult && 'function' === typeof processresult.then) {
+        processresult.then(this.readChunk.bind(this, buffer, processfn));
+      } else {
+        this.readChunk(buffer,processfn);
+      }
     } else {
       processfn();
     }
@@ -122,6 +129,7 @@ function createReaders(execlib,FileOperation,util) {
       var delim = parser.recordDelimiter, tord = typeof delim, start, quantity;
       if ('number' === tord) {
         if (!(this.options && this.options.raw)) {
+          this.result = 0;
           this.readInFixedChunks(delim, this.onRecordRead.bind(this, parser));
         } else {
           start = this.options.hasOwnProperty('startfrom') ? this.options.startfrom * delim : null;
@@ -144,22 +152,21 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
-    var d, rec;
+    var rec;
     if (!record) {
       rec = parser.finalize();
       if(lib.defined(rec)){
+        this.result++;
         this.notify(rec);
       }
       this.close();
       return;
     }
-    d = q.defer();
     rec = parser.fileToData(record);
     if(lib.defined(rec)){
+      this.result++;
       this.notify(rec);
     }
-    d.resolve(rec);
-    return d.promise;
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
     this.read(start, quantity).done(
