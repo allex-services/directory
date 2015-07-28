@@ -300,11 +300,11 @@ function createReaders(execlib,FileOperation,util) {
   DirReader.prototype.populateStats = function (filename, fstats, stats, statskey) {
     var mn = 'extract_'+statskey, 
       m = this[mn];
-    if ('function' !== typeof m){
-      console.log('Method',mn,'does not exist to populate',statskey,'of filestats');
-    } else {
+    if ('function' === typeof m){
       stats[statskey] = m.call(this, filename, fstats);
-    }
+    }/* else {
+      console.log('Method',mn,'does not exist to populate',statskey,'of filestats');
+    }*/
   };
   DirReader.prototype.extract_filename = function (filename, fstats) {
     return filename;
