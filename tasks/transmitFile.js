@@ -13,6 +13,7 @@ function createTransmitFileTask(execlib){
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
     this.remotefilename = prophash.remotefilename || prophash.filename;
+    this.metadata = prophash.metadata;
     this.cb = prophash.cb;
     this.deleteonsuccess = prophash.deleteonsuccess || false;
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
@@ -66,7 +67,8 @@ function createTransmitFileTask(execlib){
       ipaddress: this.ipaddress,
       options: {
         filename: this.remotefilename,
-        filesize: this.filesize
+        filesize: this.filesize,
+        metadata: this.metadata
       },
       onPayloadNeeded: this.readChunk.bind(this)
     });
