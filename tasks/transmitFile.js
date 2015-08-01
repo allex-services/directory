@@ -25,7 +25,7 @@ function createTransmitFileTask(execlib){
   lib.inherit(TransmitFileTask,SinkTask);
   TransmitFileTask.prototype.__cleanUp = function(){
     if(this.cb){
-      this.cb(this.succeeded);
+      this.cb(this.succeeded, this.remotefilename);
     }
     if(this.file){
       fs.closeSync(this.file);
@@ -55,13 +55,6 @@ function createTransmitFileTask(execlib){
     }
     this.file = filehandle;
     try{
-    taskRegistry.run('readState',{
-      state: taskRegistry.run('materializeState',{
-        sink: this.sink
-      }),
-      name: ['uploads',this.remotefilename],
-      cb: this.onWriteConfirmed.bind(this)
-    });
     taskRegistry.run('transmitTcp',{
       sink: this.sink,
       ipaddress: this.ipaddress,
@@ -70,12 +63,23 @@ function createTransmitFileTask(execlib){
         filesize: this.filesize,
         metadata: this.metadata
       },
-      onPayloadNeeded: this.readChunk.bind(this)
+      onPayloadNeeded: this.readChunk.bind(this),
+      onRequestNotification: this.onUploadFilePath.bind(this)
     });
     } catch (e) {
       console.error(e.stack);
       console.error(e);
     }
+  };
+  TransmitFileTask.prototype.onUploadFilePath = function (uploadfilepath) {
+    this.remotefilename = uploadfilepath;
+    taskRegistry.run('readState',{
+      state: taskRegistry.run('materializeState',{
+        sink: this.sink
+      }),
+      name: ['uploads',uploadfilepath],
+      cb: this.onWriteConfirmed.bind(this)
+    });
   };
   TransmitFileTask.prototype.readChunk = function(){
     if(!this.file){

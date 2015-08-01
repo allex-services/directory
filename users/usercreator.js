@@ -190,6 +190,7 @@ function createUser(execlib,ParentUser){
     //ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
   User.prototype.onUploadReady = function (options, requestdefer, writedefer, writer) {
+    requestdefer.notify(options.filename);
     options.writer = writer;
     options.serverCtor = FileUploadServer;
     ParentUser.prototype.requestTcpTransmission.call(this, options, requestdefer);
