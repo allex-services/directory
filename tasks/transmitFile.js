@@ -72,6 +72,7 @@ function createTransmitFileTask(execlib){
     }
   };
   TransmitFileTask.prototype.onUploadFilePath = function (uploadfilepath) {
+    this.log('onUploadFilePath', uploadfilepath);
     this.remotefilename = uploadfilepath;
     taskRegistry.run('readState',{
       state: taskRegistry.run('materializeState',{
@@ -98,6 +99,7 @@ function createTransmitFileTask(execlib){
     return buff;
   };
   TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
+    this.log('onWriteConfirmed', confirmed);
     this.succeeded = confirmed === this.filesize;
     if(this.succeeded){
       lib.runNext(this.destroy.bind(this));

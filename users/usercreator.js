@@ -1,4 +1,5 @@
-var fs = require('fs');
+var fs = require('fs'),
+  Path = require('path');
 
 function createUser(execlib,ParentUser){
   'use strict';
@@ -166,6 +167,7 @@ function createUser(execlib,ParentUser){
     }
   };
   User.prototype.requestUpload = function (options, defer) {
+    var metauploadpath, writemetadatadefer;
     if(!options.filename){
       //for now, reject. If DirectoryService User finds out how to 
       //handle other transmission scenarios, continue from here.
@@ -176,6 +178,20 @@ function createUser(execlib,ParentUser){
       defer.reject(new lib.Error('NO_FILESIZE_SPECIFIED_FOR_UPLOAD','filesize missing in requestTcpTransmission options'));
       return;
     }
+    if (options.metadata) {
+      metauploadpath = this.metaPath(options.filename);
+      writemetadatadefer = q.defer();
+      console.log('metauploadpath', metauploadpath);
+      this.write(metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
+      writemetadatadefer.promise.done(
+        this.realizeUploadRequest.bind(this, options, defer),
+        defer.reject.bind(defer)
+      );
+    } else {
+      this.realizeUploadRequest(options, defer);
+    }
+  };
+  User.prototype.realizeUploadRequest = function (options, defer) {
     if(this._checkOnWaitingUploads(options,defer)){
       return;
     }
@@ -190,6 +206,7 @@ function createUser(execlib,ParentUser){
     //ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
   User.prototype.onUploadReady = function (options, requestdefer, writedefer, writer) {
+    console.log('onUploadReady', options);
     requestdefer.notify(options.filename);
     options.writer = writer;
     options.serverCtor = FileUploadServer;
@@ -232,6 +249,9 @@ function createUser(execlib,ParentUser){
   User.prototype.traverse = function (dirname, options, defer) {
     options.traverse = true;
     this.__service.db.read(dirname, options, defer);
+  };
+  User.prototype.metaPath = function (filepath) {
+    return Path.join(Path.dirname(filepath),'.meta',Path.basename(filepath));
   };
 
   return User;
