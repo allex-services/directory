@@ -5,11 +5,29 @@ function createUser(execlib,ParentUser){
   'use strict';
   var lib = execlib.lib,
     q = lib.q,
-    execSuite = execlib.execSuite;
+    execSuite = execlib.execSuite,
+    UserSession,
+    Channel;
 
   if(!ParentUser){
     ParentUser = execSuite.ServicePack.Service.prototype.userFactory.get('user');
   }
+
+  UserSession = ParentUser.prototype.getSessionCtor('.');
+  Channel = UserSession.Channel;
+
+  function DirectoryChannel(usersession) {
+    Channel.call(this, usersession);
+  }
+  lib.inherit(DirectoryChannel, Channel);
+  DirectoryChannel.prototype.name = 'fs';
+
+  function DirectorySession(user, session, gate) {
+    UserSession.call(this, user, session, gate);
+    this.addChannel(DirectoryChannel);
+  }
+  UserSession.inherit(DirectorySession);
+  DirectorySession.Channel = DirectoryChannel;
 
   function FileUploadServer(user,options){
     ParentUser.prototype.TcpTransmissionServer.call(this,user,options);
@@ -127,13 +145,22 @@ function createUser(execlib,ParentUser){
   function User(prophash){
     ParentUser.call(this,prophash);
     this.waitinguploads = new lib.Map();
+    this.fsEventListener = this.__service.db.changed.attach(this.onFSEvent.bind(this));
   }
   ParentUser.inherit(User,require('../methoddescriptors/user'),[/*visible state fields here*/]/*or a ctor for StateStream filter*/);
   User.prototype.__cleanUp = function(){
+    if (!this.fsEventListener) {
+      return;
+    }
+    this.fsEventListener.destroy();
+    this.fsEventListener = null;
     lib.containerDestroyAll(this.waitinguploads);
     this.waitinguploads.destroy();
     this.waitinguploads = null;
     ParentUser.prototype.__cleanUp.call(this);
+  };
+  User.prototype.onFSEvent = function () {
+    console.log('FS event', arguments);
   };
   User.prototype._checkOnWaitingUploads = function(options,defer){
     var filename = options.filename,
@@ -253,6 +280,7 @@ function createUser(execlib,ParentUser){
   User.prototype.metaPath = function (filepath) {
     return Path.join(Path.dirname(filepath),'.meta',Path.basename(filepath));
   };
+  User.prototype.getSessionCtor = execSuite.userSessionFactoryCreator(DirectorySession);
 
   return User;
 }

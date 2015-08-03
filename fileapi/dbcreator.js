@@ -73,9 +73,14 @@ function createHandler(execlib, util) {
     lib.Map.call(this);
     this.rootpath = rootpath;
     this.closingDefer = null;
+    this.changed = new lib.HookCollection();
   }
   lib.inherit(FileDataBase,lib.Map);
   FileDataBase.prototype.destroy = function () {
+    if (this.changed) {
+      this.changed.destruct();
+    }
+    this.changed = null;
     if(this.closingDefer) {
       if(this.count){
         this.closingDefer.notify(this.count);

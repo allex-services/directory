@@ -30,6 +30,11 @@ function createDirectoryService(execlib,ParentServicePack){
     this.db = null;
     ParentService.prototype.__cleanUp.call(this);
   };
+  DirectoryService.prototype.preProcessUserHash = function (userhash) {
+    if (userhash) {
+      userhash.name = userhash.role+':'+(userhash.path || '.');
+    }
+  };
   
   return DirectoryService;
 }
