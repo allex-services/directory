@@ -144,6 +144,7 @@ function createUser(execlib,ParentUser){
 
   function User(prophash){
     ParentUser.call(this,prophash);
+    this.path = prophash.path;
     this.waitinguploads = new lib.Map();
     this.fsEventListener = this.__service.db.changed.attach(this.onFSEvent.bind(this));
   }
@@ -157,6 +158,7 @@ function createUser(execlib,ParentUser){
     lib.containerDestroyAll(this.waitinguploads);
     this.waitinguploads.destroy();
     this.waitinguploads = null;
+    this.path = null;
     ParentUser.prototype.__cleanUp.call(this);
   };
   User.prototype.onFSEvent = function () {
@@ -274,8 +276,14 @@ function createUser(execlib,ParentUser){
     }
   };
   User.prototype.traverse = function (dirname, options, defer) {
+    try{
+    console.log('should traverse', dirname, 'with my path', this.path);
     options.traverse = true;
-    this.__service.db.read(dirname, options, defer);
+    this.__service.db.read(this.path ? Path.join(this.path, dirname) : dirname, options, defer);
+    } catch(e) {
+      console.error(e.stack);
+      console.error(e);
+    }
   };
   User.prototype.metaPath = function (filepath) {
     return Path.join(Path.dirname(filepath),'.meta',Path.basename(filepath));

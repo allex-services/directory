@@ -211,6 +211,7 @@ function createReaders(execlib,FileOperation,util) {
 
   function DirReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
+    this.filecount = 0;
     this.options = options;
     this.parserInfo = {
       needed: false,
@@ -228,6 +229,7 @@ function createReaders(execlib,FileOperation,util) {
   lib.inherit(DirReader, FileReader);
   DirReader.prototype.destroy = function () {
     this.options = null;
+    this.filecount = null;
     FileReader.prototype.destroy.call(this);
   };
   DirReader.prototype.go = function () {
@@ -262,8 +264,23 @@ function createReaders(execlib,FileOperation,util) {
     if (err) {
       this.fail(err);
     } else {
-      list.forEach(this.processFileName.bind(this));
+      this.result = 0;
+      if (list.length) {
+        this.filecount = list.length;
+        list.forEach(this.processFileName.bind(this));
+      } else {
+        this.destroy();
+      }
     }
+  };
+  DirReader.prototype.checkDone = function () {
+    if(this.filecount===this.result){
+      this.destroy();
+    };
+  };
+  DirReader.prototype.oneDone = function () {
+    this.result ++;
+    this.checkDone();
   };
   DirReader.prototype.processFileName = function (filename) {
     if (this.options.filestats) {
@@ -273,17 +290,19 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   DirReader.prototype.reportFile = function (filename, reportobj) {
+    console.log('reportFile', filename, this.parserInfo);
     if (this.parserInfo.needed) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
       d.promise.done(
-        console.log.bind(console,'parse done'),
+        this.oneDone.bind(this),
         this.fail.bind(this),
         this.onParsedRecord.bind(this, reportobj || {})
       );
       parser.go();
     } else {
       this.notify(reportobj || filename);
+      this.oneDone();
     }
   };
   DirReader.prototype.onParsedRecord = function (statsobj, parsedrecord) {
