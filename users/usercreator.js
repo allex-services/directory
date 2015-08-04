@@ -161,8 +161,24 @@ function createUser(execlib,ParentUser){
     this.path = null;
     ParentUser.prototype.__cleanUp.call(this);
   };
-  User.prototype.onFSEvent = function () {
-    console.log('FS event', arguments);
+  User.prototype.onFSEvent = function (path, originalfs, newfs) {
+    var pi;
+    if (this.path) {
+      pi = path.indexOf(this.path);
+      if (pi===0){
+        this.broadcastFSEvent(path.substring(pi), originalfs, newfs);
+      } else {
+        console.log('my path', this.path, 'is not a start of', path);
+      }
+    } else {
+      this.broadcastFSEvent(path, originalfs, newfs);
+    }
+  };
+  User.prototype.broadcastFSEvent = function (path, originalfs, newfs) {
+    var fseobj = {p:path, o: originalfs, n: newfs};
+    this.sessions.traverse(function(s){
+      s.channels.get('fs').onStream(fseobj);
+    });
   };
   User.prototype._checkOnWaitingUploads = function(options,defer){
     var filename = options.filename,
@@ -284,6 +300,8 @@ function createUser(execlib,ParentUser){
       console.error(e.stack);
       console.error(e);
     }
+  };
+  User.prototype.notifyFSEvent = function (originalfs, newfs, path) {
   };
   User.prototype.metaPath = function (filepath) {
     return Path.join(Path.dirname(filepath),'.meta',Path.basename(filepath));

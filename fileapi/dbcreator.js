@@ -50,7 +50,7 @@ function createHandler(execlib, util) {
   };
   FileQ.prototype.handleWriter = function (writer) {
     if (this.writePromise) {
-      this.push(reader);
+      this.push(writer);
     }else{
       this.writePromise = writer.defer.promise;
       this.writePromise.then(this.writerDown.bind(this));
@@ -61,7 +61,19 @@ function createHandler(execlib, util) {
     this.activeReaders--;
     this.handleQ();
   };
-  FileQ.prototype.writerDown = function () {
+  FileQ.prototype.writerDown = function (result) {
+    if (result) {
+      var d = q.defer();
+      util.FStats(this.path, d);
+      d.promise.done(
+        this.finalizeWriterDown.bind(this, result)
+      );
+    } else {
+      this.finalizeWriterDown(result);
+    }
+  };
+  FileQ.prototype.finalizeWriterDown = function (originalfs, newfstats) {
+    this.database.changed.fire(this.name, originalfs, newfstats);
     this.writePromise = null;
     this.handleQ();
   };

@@ -73,6 +73,26 @@ function fileSize(filepath,defer){
   }
 }
 
+function FStats(filepath,defer) {
+  if(defer){
+    fs.lstat(filepath,function(err,fstats){
+      if(err){
+        defer.resolve(null);
+      }else{
+        defer.resolve(fstats);
+      }
+    });
+  }else{
+    try{
+      var fstats = fs.lstatSync(filepath);
+      return fstats;
+    }
+    catch(e){
+      return null;
+    }
+  }
+}
+
 function createUtil(execlib){
   'use strict';
   return {
@@ -80,6 +100,7 @@ function createUtil(execlib){
     pathForFilename: pathForFilename,
     fileSize: fileSize,
     fileType: fileType,
+    FStats: FStats,
     typeFromStats: typeFromStats
   };
 }

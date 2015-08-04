@@ -23,14 +23,23 @@ function createWriters(execlib,FileOperation) {
     this.q = null;
     this.iswriting = null;
     this.openMode = null;
+    this.result = this.originalFS;
     FileOperation.prototype.destroy.call(this);
   };
   FileWriter.prototype.go = function () {
     if (this.active) {
       return;
     }
-    this.active = true;
-    this.open();
+    this.size().done(
+      this.readyToOpen.bind(this)
+    );
+  };
+  FileWriter.prototype.readyToOpen = function () {
+    console.log('readyToOpen', arguments);
+    if(!this.active){
+      this.active = true;
+      this.open();
+    }
   };
   FileWriter.prototype.write = function (chunk, defer) {
     defer = defer || q.defer();

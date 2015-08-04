@@ -9,6 +9,7 @@ function createFileOperation(execlib, util) {
   //FileOperation gets destroyed without opening
   //the file...
   function FileOperation(name, path, defer) {
+    this.originalFS = null;
     this.name = name;
     this.path = path;
     this.defer = defer;
@@ -41,15 +42,45 @@ function createFileOperation(execlib, util) {
     this.defer = null;
     this.path = null;
     this.name = null;
+    this.originalFS = null;
+  };
+  FileOperation.prototype.setOriginalFS = function (d, nameofinterest, defaultvalue, fs){
+    this.originalFS = fs;
+    if (nameofinterest) {
+      if(lib.isString(nameofinterest)) {
+        d.resolve(fs ? fs[nameofinterest] : defaultvalue);
+      }
+      if(lib.isFunction(nameofinterest)) {
+        d.resolve(fs ? nameofinterest(fs) : defaultvalue);
+      }
+    } else {
+      d.resolve();
+    }
   };
   FileOperation.prototype.size = function () {
-    var d = q.defer();
-    util.fileSize(this.path,d);
+    var d = q.defer(), ud = q.defer();
+    if(!this.originalFS){
+      util.FStats(this.path,ud);
+      ud.promise.done(
+        this.setOriginalFS.bind(this, d, 'size', 0),
+        d.reject.bind(d)
+      );
+    } else {
+      return this.originalFS.size;
+    }
     return d.promise;
   };
   FileOperation.prototype.type = function () {
-    var d = q.defer();
-    util.fileType(this.path,d);
+    var d = q.defer(), ud = q.defer();
+    if(!this.originalFS){
+      util.FStats(this.path,ud);
+      ud.promise.done(
+        this.setOriginalFS.bind(this, d, util.typeFromStats, ''),
+        d.reject.bind(d)
+      );
+    } else {
+      return util.typeFromStats(this.originalFS);
+    }
     return d.promise;
   };
   FileOperation.prototype.notify = function(obj){
