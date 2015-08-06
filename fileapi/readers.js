@@ -220,10 +220,14 @@ function createReaders(execlib,FileOperation,util) {
     };
     if (this.options.filecontents) {
       this.parserInfo.needed = true;
-      execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
-        this.onParserInstantiated.bind(this),
-        this.fail.bind(this)
-      );
+      if (this.options.filecontents.modulename === '*') {
+        console.log('should prepare for .meta');
+      } else {
+        execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
+          this.onParserInstantiated.bind(this),
+          this.fail.bind(this)
+        );
+      }
     }
   }
   lib.inherit(DirReader, FileReader);

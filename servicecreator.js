@@ -1,4 +1,5 @@
-var fs = require('fs');
+var fs = require('fs'),
+  Path = require('path');
 
 function createDirectoryService(execlib,ParentServicePack){
   'use strict';
@@ -32,6 +33,13 @@ function createDirectoryService(execlib,ParentServicePack){
   };
   DirectoryService.prototype.preProcessUserHash = function (userhash) {
     if (userhash) {
+      if (lib.isArray(userhash.path)) {
+        try {
+          userhash.path = Path.join.apply(Path,userhash.path);
+        } catch (e) {
+          userhash.path = '.';
+        }
+      }
       userhash.name = userhash.role+':'+(userhash.path || '.');
     }
   };
