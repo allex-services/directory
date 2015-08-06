@@ -287,11 +287,19 @@ function createReaders(execlib,FileOperation,util) {
     this.checkDone();
   };
   DirReader.prototype.processFileName = function (filename) {
-    if (this.options.filestats) {
+    if (this.options.filelist && this.options.filelist.indexOf(filename) < 0) {
+      this.filecount --;
+      this.checkDone();
+      return;
+    }
+    if (this.needsFStats()) {
       fs.lstat(Path.join(this.path,filename), this.onFileStats.bind(this,filename));
     } else {
       this.reportFile(filename);
     }
+  };
+  DirReader.prototype.needsFStats = function () {
+    return this.options.filestats || this.options.filetypes;
   };
   DirReader.prototype.reportFile = function (filename, reportobj) {
     console.log('reportFile', filename, this.parserInfo);
@@ -317,6 +325,13 @@ function createReaders(execlib,FileOperation,util) {
   };
   DirReader.prototype.onFileStats = function (filename, err, fstats, stats) {
     stats = stats || {};
+    if (this.options.filetypes) {
+      if (lib.isArray(this.options.filetypes) && this.options.filetypes.indexOf(util.typeFromStats(fstats))<0) {
+        this.filecount--;
+        this.checkDone();
+        return;
+      }
+    }
     this.options.filestats.forEach(this.populateStats.bind(this,filename,fstats,stats));
     this.reportFile(filename,stats);
   };
