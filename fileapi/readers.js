@@ -220,9 +220,7 @@ function createReaders(execlib,FileOperation,util) {
     };
     if (this.options.filecontents) {
       this.parserInfo.needed = true;
-      if (this.options.filecontents.modulename === '*') {
-        console.log('should prepare for .meta');
-      } else {
+      if (this.options.filecontents.modulename !== '*') {
         execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
           this.onParserInstantiated.bind(this),
           this.fail.bind(this)
@@ -237,7 +235,7 @@ function createReaders(execlib,FileOperation,util) {
     FileReader.prototype.destroy.call(this);
   };
   DirReader.prototype.go = function () {
-    if(this.parserInfo.needed) {
+    if(this.parserInfo.needed && this.options.filecontents.modulename !== '*') {
       console.log('current parserInfo', this.parserInfo);
       if (!this.parserInfo.instance) {
         this.parserInfo.waiting = true;
@@ -271,11 +269,30 @@ function createReaders(execlib,FileOperation,util) {
       this.result = 0;
       if (list.length) {
         this.filecount = list.length;
-        list.forEach(this.processFileName.bind(this));
+        this.processFileList(list);
       } else {
         this.destroy();
       }
     }
+  };
+  DirReader.prototype.processFileList = function (filelist) {
+    var filename;
+    if (filelist.length) {
+      filename = filelist.pop();
+      this.processFileName(filename).done(
+        this.processSuccess.bind(this,filelist,filename),
+        this.fail.bind(this)
+      );
+    }
+  };
+  DirReader.prototype.processSuccess = function (filelist, filename, result) {
+    console.log('processSuccess', filename, result);
+    if (result) {
+      this.oneDone();
+    } else {
+      this.oneFailed();
+    }
+    this.processFileList(filelist);
   };
   DirReader.prototype.checkDone = function () {
     if(this.filecount===this.result){
@@ -286,16 +303,49 @@ function createReaders(execlib,FileOperation,util) {
     this.result ++;
     this.checkDone();
   };
+  DirReader.prototype.oneFailed = function () {
+    this.filecount --;
+    this.checkDone();
+  };
   DirReader.prototype.processFileName = function (filename) {
-    if (this.options.filelist && this.options.filelist.indexOf(filename) < 0) {
-      this.filecount --;
-      this.checkDone();
+    var d = q.defer(), rd, metareader;
+    if (this.options.files && this.options.files.indexOf(filename) < 0) {
+      d.resolve(false);
+      return d.promise;
+    }
+    if (this.parserInfo.needed && this.options.filecontents.modulename === '*') {
+      rd = q.defer();
+      metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
+      rd.promise.done(
+        this.onMeta.bind(this,d,filename),
+        this.oneFailed.bind(this)
+      );
+      metareader.go();
+    } else {
+      this.checkFStats(d, filename);
+    }
+    return d.promise;
+  };
+  DirReader.prototype.onMeta = function (defer, filename, meta) {
+    if (!(meta && meta.parserinfo)) {
+      defer.resolve(false);
       return;
     }
+    console.log(filename, 'meta.parserinfo', meta.parserinfo);
+    execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.prophash).done(
+      this.onMetaParser.bind(this, defer, filename),
+      defer.resolve.bind(defer,false)
+    );
+  };
+  DirReader.prototype.onMetaParser = function (defer, filename, parser) {
+    this.parserInfo.instance = parser;
+    this.checkFStats(defer, filename);
+  };
+  DirReader.prototype.checkFStats = function (defer, filename) {
     if (this.needsFStats()) {
-      fs.lstat(Path.join(this.path,filename), this.onFileStats.bind(this,filename));
+      fs.lstat(Path.join(this.path,filename), this.onFileStats.bind(this,defer,filename));
     } else {
-      this.reportFile(filename);
+      this.reportFile(filename, {defer:defer});
     }
   };
   DirReader.prototype.needsFStats = function () {
@@ -307,14 +357,14 @@ function createReaders(execlib,FileOperation,util) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
       d.promise.done(
-        this.oneDone.bind(this),
+        reportobj.defer.resolve.bind(reportobj.defer,true),
         this.fail.bind(this),
-        this.onParsedRecord.bind(this, reportobj || {})
+        this.onParsedRecord.bind(this, reportobj.data || {})
       );
       parser.go();
     } else {
-      this.notify(reportobj || filename);
-      this.oneDone();
+      this.notify(reportobj.data || filename);
+      reportobj.defer.resolve(true);
     }
   };
   DirReader.prototype.onParsedRecord = function (statsobj, parsedrecord) {
@@ -323,17 +373,16 @@ function createReaders(execlib,FileOperation,util) {
     });
     this.notify(parsedrecord);
   };
-  DirReader.prototype.onFileStats = function (filename, err, fstats, stats) {
+  DirReader.prototype.onFileStats = function (defer, filename, err, fstats, stats) {
     stats = stats || {};
     if (this.options.filetypes) {
       if (lib.isArray(this.options.filetypes) && this.options.filetypes.indexOf(util.typeFromStats(fstats))<0) {
-        this.filecount--;
-        this.checkDone();
+        defer.resolve(false);
         return;
       }
     }
     this.options.filestats.forEach(this.populateStats.bind(this,filename,fstats,stats));
-    this.reportFile(filename,stats);
+    this.reportFile(filename,{defer: defer, data: stats});
   };
   DirReader.prototype.populateStats = function (filename, fstats, stats, statskey) {
     var mn = 'extract_'+statskey, 
