@@ -66,7 +66,7 @@ function createUser(execlib,ParentUser){
     }
   };
   FileUploadServer.prototype.onPacketWritten = function () {
-    console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
+    //console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
     this.user.state.set(this.uploadpath, this.options.writer.result);
   };
   FileUploadServer.prototype.onTransmissionDone = function(){
@@ -84,9 +84,9 @@ function createUser(execlib,ParentUser){
     if(this.readPromise){
       return;
     }
-    console.log('my q',this.q);
+    //console.log('my q',this.q);
     if(this.q && this.q.length){
-      console.log("Can't die yet,",this.q.length,'items still in q');
+      //console.log("Can't die yet,",this.q.length,'items still in q');
       return;
     }
     if(this.freetowrite === null){
@@ -101,7 +101,7 @@ function createUser(execlib,ParentUser){
     if(!this.q){
       return;
     }
-    console.log('clearing freetowrite', this.q.length, 'items still in q');
+    //console.log('clearing freetowrite', this.q.length, 'items still in q');
     this.freetowrite = true;
     var next = this.q.pop();
     if(next){
@@ -109,7 +109,7 @@ function createUser(execlib,ParentUser){
     }
   };
   FileDownloadServer.prototype.onConnection = function (server, connection) {
-    console.log('client connected for download');
+    //console.log('client connected for download');
     if(this.readPromise && this.readPromise!==true){
       return;
     }
@@ -121,14 +121,14 @@ function createUser(execlib,ParentUser){
       this.readOver.bind(this, server, connection),
       this.sendPacket.bind(this, server, connection)
     );
-    console.log('readPromise set');
+    //console.log('readPromise set');
   };
   FileDownloadServer.prototype.readOver = function (server, connection) {
     this.readPromise = null;
     this.closeAllAndDie(server, connection);
   };
   FileDownloadServer.prototype.sendPacket = function (server, connection, packet) {
-    console.log('sendPacket',this,packet);
+    //console.log('sendPacket',this,packet);
     if(!this.q){
       console.error('Y ME DED?');
       return;
@@ -137,7 +137,7 @@ function createUser(execlib,ParentUser){
       this.q.push(packet);
       return;
     }
-    console.log('should send',packet,'on download');
+    //console.log('should send',packet,'on download');
     this.freetowrite = connection.write(packet, this.clearToSend.bind(this, server, connection));
   };
 
@@ -170,7 +170,7 @@ function createUser(execlib,ParentUser){
       if (pi===0){
         this.broadcastFSEvent(path.substring(pi), originalfs, newfs);
       } else {
-        console.log('my path', this.path, 'is not a start of', path);
+        //console.log('my path', this.path, 'is not a start of', path);
       }
     } else {
       this.broadcastFSEvent(path, originalfs, newfs);
@@ -199,7 +199,7 @@ function createUser(execlib,ParentUser){
       uploadpath = ['uploads',filename],
       uploadactive = this.__service.state.get(uploadpath),
       und;
-    console.log('uploadactive for',uploadpath,':',uploadactive);
+    //console.log('uploadactive for',uploadpath,':',uploadactive);
     if(uploadactive!==und){
       this.waitinguploads.add(filename,new execSuite.ADS.listenToScalar(uploadpath,{d:this.requestTcpTransmission.bind(this,options,defer)}));
       return true;
@@ -228,7 +228,7 @@ function createUser(execlib,ParentUser){
     if (options.metadata) {
       metauploadpath = this.metaPath(options.filename);
       writemetadatadefer = q.defer();
-      console.log('metauploadpath', metauploadpath);
+      //console.log('metauploadpath', metauploadpath);
       this.write(metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
       writemetadatadefer.promise.done(
         this.realizeUploadRequest.bind(this, options, defer),
@@ -253,7 +253,7 @@ function createUser(execlib,ParentUser){
     //ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
   User.prototype.onUploadReady = function (options, requestdefer, writedefer, writer) {
-    console.log('onUploadReady', options);
+    //console.log('onUploadReady', options);
     requestdefer.notify(options.filename);
     options.writer = writer;
     options.serverCtor = FileUploadServer;
@@ -297,7 +297,7 @@ function createUser(execlib,ParentUser){
     var opts = lib.extend({}, this.traversaloptions);
     lib.extend (opts, options);
     opts.traverse = true;
-    console.log('my opts', this.traversaloptions, '+ particular opts', options, '=>', opts);
+    //console.log('my opts', this.traversaloptions, '+ particular opts', options, '=>', opts);
     this.__service.db.read(this.path ? Path.join(this.path, dirname) : dirname, opts, defer);
   };
   User.prototype.notifyFSEvent = function (originalfs, newfs, path) {

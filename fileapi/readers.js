@@ -352,7 +352,7 @@ function createReaders(execlib,FileOperation,util) {
     return this.options.filestats || this.options.filetypes;
   };
   DirReader.prototype.reportFile = function (filename, reportobj) {
-    console.log('reportFile', filename, this.parserInfo);
+    //console.log('reportFile', filename, this.parserInfo);
     if (this.parserInfo.needed) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
