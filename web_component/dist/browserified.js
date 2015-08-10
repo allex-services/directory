@@ -82,7 +82,7 @@ function createHandler(execlib, util) {
   };
   FileQ.prototype.handleWriter = function (writer) {
     if (this.writePromise) {
-      this.push(reader);
+      this.push(writer);
     }else{
       this.writePromise = writer.defer.promise;
       this.writePromise.then(this.writerDown.bind(this));
@@ -93,7 +93,19 @@ function createHandler(execlib, util) {
     this.activeReaders--;
     this.handleQ();
   };
-  FileQ.prototype.writerDown = function () {
+  FileQ.prototype.writerDown = function (result) {
+    if (result) {
+      var d = q.defer();
+      util.FStats(this.path, d);
+      d.promise.done(
+        this.finalizeWriterDown.bind(this, result)
+      );
+    } else {
+      this.finalizeWriterDown(result);
+    }
+  };
+  FileQ.prototype.finalizeWriterDown = function (originalfs, newfstats) {
+    this.database.changed.fire(this.name, originalfs, newfstats);
     this.writePromise = null;
     this.handleQ();
   };
@@ -105,9 +117,14 @@ function createHandler(execlib, util) {
     lib.Map.call(this);
     this.rootpath = rootpath;
     this.closingDefer = null;
+    this.changed = new lib.HookCollection();
   }
   lib.inherit(FileDataBase,lib.Map);
   FileDataBase.prototype.destroy = function () {
+    if (this.changed) {
+      this.changed.destruct();
+    }
+    this.changed = null;
     if(this.closingDefer) {
       if(this.count){
         this.closingDefer.notify(this.count);
@@ -158,6 +175,7 @@ function createFileOperation(execlib, util) {
   //FileOperation gets destroyed without opening
   //the file...
   function FileOperation(name, path, defer) {
+    this.originalFS = null;
     this.name = name;
     this.path = path;
     this.defer = defer;
@@ -190,15 +208,49 @@ function createFileOperation(execlib, util) {
     this.defer = null;
     this.path = null;
     this.name = null;
+    this.originalFS = null;
+  };
+  FileOperation.prototype.setOriginalFS = function (d, nameofinterest, defaultvalue, fs){
+    //console.log('setting originalFS; will read', nameofinterest, 'later');
+    this.originalFS = fs;
+    if (nameofinterest) {
+      if(lib.isString(nameofinterest)) {
+        //console.log('from',fs,'it is', fs ? fs[nameofinterest] : 'N/A','(', defaultvalue, ')');
+        d.resolve(fs ? fs[nameofinterest] : defaultvalue);
+      }
+      if(lib.isFunction(nameofinterest)) {
+        d.resolve(fs ? nameofinterest(fs) : defaultvalue);
+      }
+    } else {
+      d.resolve();
+    }
   };
   FileOperation.prototype.size = function () {
-    var d = q.defer();
-    util.fileSize(this.path,d);
+    var d = q.defer(), ud = q.defer();
+    if(!this.originalFS){
+      //console.log('fetching originalFS');
+      util.FStats(this.path,ud);
+      ud.promise.done(
+        this.setOriginalFS.bind(this, d, 'size', 0),
+        d.reject.bind(d)
+      );
+    } else {
+      //console.log('returning originalFS.size', this.originalFS.size);
+      return this.originalFS.size;
+    }
     return d.promise;
   };
   FileOperation.prototype.type = function () {
-    var d = q.defer();
-    util.fileType(this.path,d);
+    var d = q.defer(), ud = q.defer();
+    if(!this.originalFS){
+      util.FStats(this.path,ud);
+      ud.promise.done(
+        this.setOriginalFS.bind(this, d, util.typeFromStats, ''),
+        d.reject.bind(d)
+      );
+    } else {
+      return util.typeFromStats(this.originalFS);
+    }
     return d.promise;
   };
   FileOperation.prototype.notify = function(obj){
@@ -280,7 +332,7 @@ function createReaders(execlib,FileOperation,util) {
     if(!('number' === typeof startfrom || startfrom instanceof Number)) {
       startfrom = null;
     }
-    console.log('reading',size,'bytes for buffer of size', buffer.length);
+    //console.log('reading',size,'bytes for buffer of size', buffer.length);
     fs.read(this.fh, buffer, 0, size, startfrom, this._onBufferRead.bind(this, defer));
     return defer.promise;
   };
@@ -319,6 +371,7 @@ function createReaders(execlib,FileOperation,util) {
     this.size().done(this.onSizeForFixedChunks.bind(this, recordsize, processfn));
   };
   FileReader.prototype.onSizeForFixedChunks = function (recordsize, processfn, size) {
+    //console.log('onSizeForFixedChunks', size, recordsize);
     if (size%recordsize) {
       this.fail(new lib.Error('RECORD_SIZE_MISMATCH',this.name+' is of size '+size+' record of size '+recordsize+' cannot fit'));
       return;
@@ -330,8 +383,15 @@ function createReaders(execlib,FileOperation,util) {
     fs.read(this.fh, buffer, 0, buffer.length, null, this.onChunkRead.bind(this, processfn));
   };
   FileReader.prototype.onChunkRead = function (processfn, err, bytesread, buffer) {
+    var processresult;
     if (bytesread === buffer.length) {
-      processfn(buffer).then(this.readChunk.bind(this, buffer, processfn));
+      processresult = processfn(buffer);
+      //attempt to support possible async parsing; for now the parsing is synchronous
+      if (processresult && 'function' === typeof processresult.then) {
+        processresult.then(this.readChunk.bind(this, buffer, processfn));
+      } else {
+        this.readChunk(buffer,processfn);
+      }
     } else {
       processfn();
     }
@@ -374,6 +434,7 @@ function createReaders(execlib,FileOperation,util) {
       var delim = parser.recordDelimiter, tord = typeof delim, start, quantity;
       if ('number' === tord) {
         if (!(this.options && this.options.raw)) {
+          this.result = 0;
           this.readInFixedChunks(delim, this.onRecordRead.bind(this, parser));
         } else {
           start = this.options.hasOwnProperty('startfrom') ? this.options.startfrom * delim : null;
@@ -383,7 +444,7 @@ function createReaders(execlib,FileOperation,util) {
         }
       }
       if (parser.recordDelimiter instanceof Buffer) {
-        console.log('time for readVariableLengthRecords', parser.recordDelimiter);
+        //console.log('time for readVariableLengthRecords', parser.recordDelimiter);
         this.openDefer.promise.done(this.readVariableLengthRecords.bind(this, parser, {offset:0}));
         this.open();
       }
@@ -396,24 +457,24 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
-    var d, rec;
+    var rec;
     if (!record) {
       rec = parser.finalize();
       if(lib.defined(rec)){
+        this.result++;
         this.notify(rec);
       }
       this.close();
       return;
     }
-    d = q.defer();
     rec = parser.fileToData(record);
     if(lib.defined(rec)){
+      this.result++;
       this.notify(rec);
     }
-    d.resolve(rec);
-    return d.promise;
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
+    //console.log('onOpenForRawRead');
     this.read(start, quantity).done(
       this.onRawReadDone.bind(this),
       this.fail.bind(this),
@@ -433,13 +494,13 @@ function createReaders(execlib,FileOperation,util) {
   };
   ParsedFileReader.prototype.readVariableLengthRecords = function (parser, offsetobj) {
     var buff = new Buffer(1050);
-    console.log('reading with offset', offsetobj.offset);
+    //console.log('reading with offset', offsetobj.offset);
     this.read(offsetobj.offset, buff).done(
       this.onBufferReadForVariableLengthRecord.bind(this, parser, buff, offsetobj)
      );
   };
   ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, offsetobj, bytesread) {
-    console.log('bytes read', bytesread);
+    //console.log('bytes read', bytesread);
     if (!bytesread) {
       this.result = offsetobj.offset;
       this.close();
@@ -456,6 +517,7 @@ function createReaders(execlib,FileOperation,util) {
 
   function DirReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
+    this.filecount = 0;
     this.options = options;
     this.parserInfo = {
       needed: false,
@@ -464,20 +526,23 @@ function createReaders(execlib,FileOperation,util) {
     };
     if (this.options.filecontents) {
       this.parserInfo.needed = true;
-      execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
-        this.onParserInstantiated.bind(this),
-        this.fail.bind(this)
-      );
+      if (this.options.filecontents.modulename !== '*') {
+        execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
+          this.onParserInstantiated.bind(this),
+          this.fail.bind(this)
+        );
+      }
     }
   }
   lib.inherit(DirReader, FileReader);
   DirReader.prototype.destroy = function () {
     this.options = null;
+    this.filecount = null;
     FileReader.prototype.destroy.call(this);
   };
   DirReader.prototype.go = function () {
-    if(this.parserInfo.needed) {
-      console.log('current parserInfo', this.parserInfo);
+    //console.log('going for', this.path, 'with current parserInfo', this.parserInfo, 'and options', this.options);
+    if(this.parserInfo.needed && this.options.filecontents.modulename !== '*') {
       if (!this.parserInfo.instance) {
         this.parserInfo.waiting = true;
         return;
@@ -490,7 +555,7 @@ function createReaders(execlib,FileOperation,util) {
     );
   };
   DirReader.prototype.onParserInstantiated = function (parser) {
-    console.log('parser instantiated', parser, 'current parserInfo', this.parserInfo);
+    //console.log('parser instantiated', parser, 'current parserInfo', this.parserInfo);
     this.parserInfo.instance = parser;
     if (this.parserInfo.waiting) {
       this.go();
@@ -507,49 +572,133 @@ function createReaders(execlib,FileOperation,util) {
     if (err) {
       this.fail(err);
     } else {
-      list.forEach(this.processFileName.bind(this));
+      this.result = 0;
+      if (list.length) {
+        this.filecount = list.length;
+        this.processFileList(list);
+      } else {
+        this.destroy();
+      }
     }
+  };
+  DirReader.prototype.processFileList = function (filelist) {
+    var filename;
+    if (filelist.length) {
+      filename = filelist.pop();
+      this.processFileName(filename).done(
+        this.processSuccess.bind(this,filelist,filename),
+        this.fail.bind(this)
+      );
+    }
+  };
+  DirReader.prototype.processSuccess = function (filelist, filename, result) {
+    //console.log('processSuccess', filename, result);
+    if (result) {
+      this.oneDone();
+    } else {
+      this.oneFailed();
+    }
+    this.processFileList(filelist);
+  };
+  DirReader.prototype.checkDone = function () {
+    if(this.filecount===this.result){
+      this.destroy();
+    };
+  };
+  DirReader.prototype.oneDone = function () {
+    this.result ++;
+    this.checkDone();
+  };
+  DirReader.prototype.oneFailed = function () {
+    this.filecount --;
+    this.checkDone();
   };
   DirReader.prototype.processFileName = function (filename) {
-    if (this.options.filestats) {
-      fs.lstat(Path.join(this.path,filename), this.onFileStats.bind(this,filename));
+    var d = q.defer(), rd, metareader;
+    if (this.options.files && this.options.files.indexOf(filename) < 0) {
+      d.resolve(false);
+      return d.promise;
+    }
+    if (this.parserInfo.needed && this.options.filecontents.modulename === '*') {
+      rd = q.defer();
+      metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
+      rd.promise.done(
+        this.onMeta.bind(this,d,filename),
+        this.oneFailed.bind(this)
+      );
+      metareader.go();
     } else {
-      this.reportFile(filename);
+      this.checkFStats(d, filename);
+    }
+    return d.promise;
+  };
+  DirReader.prototype.onMeta = function (defer, filename, meta) {
+    if (!(meta && meta.parserinfo)) {
+      defer.resolve(false);
+      return;
+    }
+    //console.log(filename, 'meta.parserinfo', meta.parserinfo);
+    execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.prophash).done(
+      this.onMetaParser.bind(this, defer, filename),
+      defer.resolve.bind(defer,false)
+    );
+  };
+  DirReader.prototype.onMetaParser = function (defer, filename, parser) {
+    this.parserInfo.instance = parser;
+    this.checkFStats(defer, filename);
+  };
+  DirReader.prototype.checkFStats = function (defer, filename) {
+    if (this.needsFStats()) {
+      fs.lstat(Path.join(this.path,filename), this.onFileStats.bind(this,defer,filename));
+    } else {
+      this.reportFile(filename, {defer:defer});
     }
   };
+  DirReader.prototype.needsFStats = function () {
+    return this.options.filestats || this.options.filetypes;
+  };
   DirReader.prototype.reportFile = function (filename, reportobj) {
+    //console.log('reportFile', filename, this.parserInfo);
     if (this.parserInfo.needed) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
       d.promise.done(
-        console.log.bind(console,'parse done'),
+        reportobj.defer.resolve.bind(reportobj.defer,true),
         this.fail.bind(this),
-        this.onParsedRecord.bind(this, reportobj || {})
+        this.onParsedRecord.bind(this, reportobj.data || {})
       );
       parser.go();
     } else {
-      this.notify(reportobj || filename);
+      this.notify(reportobj.data || filename);
+      reportobj.defer.resolve(true);
     }
   };
   DirReader.prototype.onParsedRecord = function (statsobj, parsedrecord) {
+    //console.log('notifying', parsedrecord);
     lib.traverse(statsobj,function(statsitem, statsname){
       parsedrecord[statsname] = statsitem;
     });
     this.notify(parsedrecord);
   };
-  DirReader.prototype.onFileStats = function (filename, err, fstats, stats) {
+  DirReader.prototype.onFileStats = function (defer, filename, err, fstats, stats) {
     stats = stats || {};
+    if (this.options.filetypes) {
+      if (lib.isArray(this.options.filetypes) && this.options.filetypes.indexOf(util.typeFromStats(fstats))<0) {
+        defer.resolve(false);
+        return;
+      }
+    }
     this.options.filestats.forEach(this.populateStats.bind(this,filename,fstats,stats));
-    this.reportFile(filename,stats);
+    this.reportFile(filename,{defer: defer, data: stats});
   };
   DirReader.prototype.populateStats = function (filename, fstats, stats, statskey) {
     var mn = 'extract_'+statskey, 
       m = this[mn];
-    if ('function' !== typeof m){
-      console.log('Method',mn,'does not exist to populate',statskey,'of filestats');
-    } else {
+    if ('function' === typeof m){
       stats[statskey] = m.call(this, filename, fstats);
-    }
+    }/* else {
+      console.log('Method',mn,'does not exist to populate',statskey,'of filestats');
+    }*/
   };
   DirReader.prototype.extract_filename = function (filename, fstats) {
     return filename;
@@ -664,6 +813,26 @@ function fileSize(filepath,defer){
   }
 }
 
+function FStats(filepath,defer) {
+  if(defer){
+    fs.lstat(filepath,function(err,fstats){
+      if(err){
+        defer.resolve(null);
+      }else{
+        defer.resolve(fstats);
+      }
+    });
+  }else{
+    try{
+      var fstats = fs.lstatSync(filepath);
+      return fstats;
+    }
+    catch(e){
+      return null;
+    }
+  }
+}
+
 function createUtil(execlib){
   'use strict';
   return {
@@ -671,6 +840,7 @@ function createUtil(execlib){
     pathForFilename: pathForFilename,
     fileSize: fileSize,
     fileType: fileType,
+    FStats: FStats,
     typeFromStats: typeFromStats
   };
 }
@@ -705,14 +875,23 @@ function createWriters(execlib,FileOperation) {
     this.q = null;
     this.iswriting = null;
     this.openMode = null;
+    this.result = this.originalFS;
     FileOperation.prototype.destroy.call(this);
   };
   FileWriter.prototype.go = function () {
     if (this.active) {
       return;
     }
-    this.active = true;
-    this.open();
+    this.size().done(
+      this.readyToOpen.bind(this)
+    );
+  };
+  FileWriter.prototype.readyToOpen = function () {
+    console.log('readyToOpen', arguments);
+    if(!this.active){
+      this.active = true;
+      this.open();
+    }
   };
   FileWriter.prototype.write = function (chunk, defer) {
     defer = defer || q.defer();
@@ -1335,27 +1514,30 @@ function createTransmitFileTask(execlib){
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
     this.remotefilename = prophash.remotefilename || prophash.filename;
+    this.metadata = prophash.metadata;
     this.cb = prophash.cb;
     this.deleteonsuccess = prophash.deleteonsuccess || false;
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
     this.file = null;
     this.filesize = util.fileSize(this.filepath);
-    this.succeeded = false;
+    this.uploaded = 0;
+    this.finished = false;
     this.buffer = new Buffer(64*1024);
   }
   lib.inherit(TransmitFileTask,SinkTask);
   TransmitFileTask.prototype.__cleanUp = function(){
     if(this.cb){
-      this.cb(this.succeeded);
+      this.cb(this.succeeded(), this.remotefilename);
     }
     if(this.file){
       fs.closeSync(this.file);
-      if(this.succeeded && this.deleteonsuccess){
+      if(this.succeeded() && this.deleteonsuccess){
         fs.unlinkSync(this.filepath);
       }
     }
     this.buffer = null;
-    this.succeeded = null;
+    this.finished = null;
+    this.uploaded = null;
     this.filesize = null;
     this.file = null;
     this.filepath = null;
@@ -1376,26 +1558,32 @@ function createTransmitFileTask(execlib){
     }
     this.file = filehandle;
     try{
-    taskRegistry.run('readState',{
-      state: taskRegistry.run('materializeState',{
-        sink: this.sink
-      }),
-      name: ['uploads',this.remotefilename],
-      cb: this.onWriteConfirmed.bind(this)
-    });
     taskRegistry.run('transmitTcp',{
       sink: this.sink,
       ipaddress: this.ipaddress,
       options: {
         filename: this.remotefilename,
-        filesize: this.filesize
+        filesize: this.filesize,
+        metadata: this.metadata
       },
-      onPayloadNeeded: this.readChunk.bind(this)
+      onPayloadNeeded: this.readChunk.bind(this),
+      onRequestNotification: this.onUploadFilePath.bind(this)
     });
     } catch (e) {
       console.error(e.stack);
       console.error(e);
     }
+  };
+  TransmitFileTask.prototype.onUploadFilePath = function (uploadfilepath) {
+    this.log('onUploadFilePath', uploadfilepath);
+    this.remotefilename = uploadfilepath;
+    taskRegistry.run('readState',{
+      state: taskRegistry.run('materializeState',{
+        sink: this.sink
+      }),
+      name: ['uploads',uploadfilepath],
+      cb: this.onWriteConfirmed.bind(this)
+    });
   };
   TransmitFileTask.prototype.readChunk = function(){
     if(!this.file){
@@ -1414,10 +1602,18 @@ function createTransmitFileTask(execlib){
     return buff;
   };
   TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
-    this.succeeded = confirmed === this.filesize;
-    if(this.succeeded){
+    this.log('onWriteConfirmed', confirmed);
+    if (isNaN(parseInt(confirmed))) {
+      this.finished = confirmed === '*';
+    } else {
+      this.uploaded = confirmed;
+    }
+    if(this.succeeded() || confirmed === '!'){
       lib.runNext(this.destroy.bind(this));
     }
+  };
+  TransmitFileTask.prototype.succeeded = function () {
+    return this.finished && this.uploaded === this.filesize;
   };
   TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
   return TransmitFileTask;

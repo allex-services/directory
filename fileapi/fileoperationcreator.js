@@ -45,9 +45,11 @@ function createFileOperation(execlib, util) {
     this.originalFS = null;
   };
   FileOperation.prototype.setOriginalFS = function (d, nameofinterest, defaultvalue, fs){
+    //console.log('setting originalFS; will read', nameofinterest, 'later');
     this.originalFS = fs;
     if (nameofinterest) {
       if(lib.isString(nameofinterest)) {
+        //console.log('from',fs,'it is', fs ? fs[nameofinterest] : 'N/A','(', defaultvalue, ')');
         d.resolve(fs ? fs[nameofinterest] : defaultvalue);
       }
       if(lib.isFunction(nameofinterest)) {
@@ -60,12 +62,14 @@ function createFileOperation(execlib, util) {
   FileOperation.prototype.size = function () {
     var d = q.defer(), ud = q.defer();
     if(!this.originalFS){
+      //console.log('fetching originalFS');
       util.FStats(this.path,ud);
       ud.promise.done(
         this.setOriginalFS.bind(this, d, 'size', 0),
         d.reject.bind(d)
       );
     } else {
+      //console.log('returning originalFS.size', this.originalFS.size);
       return this.originalFS.size;
     }
     return d.promise;

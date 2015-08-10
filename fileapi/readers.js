@@ -67,6 +67,7 @@ function createReaders(execlib,FileOperation,util) {
     this.size().done(this.onSizeForFixedChunks.bind(this, recordsize, processfn));
   };
   FileReader.prototype.onSizeForFixedChunks = function (recordsize, processfn, size) {
+    //console.log('onSizeForFixedChunks', size, recordsize);
     if (size%recordsize) {
       this.fail(new lib.Error('RECORD_SIZE_MISMATCH',this.name+' is of size '+size+' record of size '+recordsize+' cannot fit'));
       return;
@@ -169,6 +170,7 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
+    //console.log('onOpenForRawRead');
     this.read(start, quantity).done(
       this.onRawReadDone.bind(this),
       this.fail.bind(this),
@@ -235,8 +237,8 @@ function createReaders(execlib,FileOperation,util) {
     FileReader.prototype.destroy.call(this);
   };
   DirReader.prototype.go = function () {
+    //console.log('going for', this.path, 'with current parserInfo', this.parserInfo, 'and options', this.options);
     if(this.parserInfo.needed && this.options.filecontents.modulename !== '*') {
-      console.log('current parserInfo', this.parserInfo);
       if (!this.parserInfo.instance) {
         this.parserInfo.waiting = true;
         return;
@@ -249,7 +251,7 @@ function createReaders(execlib,FileOperation,util) {
     );
   };
   DirReader.prototype.onParserInstantiated = function (parser) {
-    console.log('parser instantiated', parser, 'current parserInfo', this.parserInfo);
+    //console.log('parser instantiated', parser, 'current parserInfo', this.parserInfo);
     this.parserInfo.instance = parser;
     if (this.parserInfo.waiting) {
       this.go();
@@ -286,7 +288,7 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   DirReader.prototype.processSuccess = function (filelist, filename, result) {
-    console.log('processSuccess', filename, result);
+    //console.log('processSuccess', filename, result);
     if (result) {
       this.oneDone();
     } else {
@@ -331,7 +333,7 @@ function createReaders(execlib,FileOperation,util) {
       defer.resolve(false);
       return;
     }
-    console.log(filename, 'meta.parserinfo', meta.parserinfo);
+    //console.log(filename, 'meta.parserinfo', meta.parserinfo);
     execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.prophash).done(
       this.onMetaParser.bind(this, defer, filename),
       defer.resolve.bind(defer,false)
@@ -368,6 +370,7 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   DirReader.prototype.onParsedRecord = function (statsobj, parsedrecord) {
+    //console.log('notifying', parsedrecord);
     lib.traverse(statsobj,function(statsitem, statsname){
       parsedrecord[statsname] = statsitem;
     });

@@ -40,8 +40,8 @@ function createUser(execlib,ParentUser){
     this.uploadpath = ['uploads',this.options.filename];
     this.written = 0;
     this.options.writer.defer.promise.then(
-      this.destroy.bind(this),
-      this.destroy.bind(this)
+      this.onSuccess.bind(this),
+      this.onFailure.bind(this)
     );
   }
   lib.inherit(FileUploadServer,ParentUser.prototype.TcpTransmissionServer);
@@ -56,6 +56,14 @@ function createUser(execlib,ParentUser){
     }
     this.uploadpath = null;
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
+  };
+  FileUploadServer.prototype.onSuccess = function () {
+    this.user.state.set(this.uploadpath, '*');
+    this.destroy();
+  };
+  FileUploadServer.prototype.onFailure = function () {
+    this.user.state.set(this.uploadpath, '!');
+    this.destroy();
   };
   FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
     //console.log('processTransmissionPacket',buffer);

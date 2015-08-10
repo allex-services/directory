@@ -19,22 +19,24 @@ function createTransmitFileTask(execlib){
     this.filepath = util.pathForFilename(prophash.root||process.cwd(),this.filename);
     this.file = null;
     this.filesize = util.fileSize(this.filepath);
-    this.succeeded = false;
+    this.uploaded = 0;
+    this.finished = false;
     this.buffer = new Buffer(64*1024);
   }
   lib.inherit(TransmitFileTask,SinkTask);
   TransmitFileTask.prototype.__cleanUp = function(){
     if(this.cb){
-      this.cb(this.succeeded, this.remotefilename);
+      this.cb(this.succeeded(), this.remotefilename);
     }
     if(this.file){
       fs.closeSync(this.file);
-      if(this.succeeded && this.deleteonsuccess){
+      if(this.succeeded() && this.deleteonsuccess){
         fs.unlinkSync(this.filepath);
       }
     }
     this.buffer = null;
-    this.succeeded = null;
+    this.finished = null;
+    this.uploaded = null;
     this.filesize = null;
     this.file = null;
     this.filepath = null;
@@ -100,10 +102,17 @@ function createTransmitFileTask(execlib){
   };
   TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
     this.log('onWriteConfirmed', confirmed);
-    this.succeeded = confirmed === this.filesize;
-    if(this.succeeded){
+    if (isNaN(parseInt(confirmed))) {
+      this.finished = confirmed === '*';
+    } else {
+      this.uploaded = confirmed;
+    }
+    if(this.succeeded() || confirmed === '!'){
       lib.runNext(this.destroy.bind(this));
     }
+  };
+  TransmitFileTask.prototype.succeeded = function () {
+    return this.finished && this.uploaded === this.filesize;
   };
   TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
   return TransmitFileTask;
