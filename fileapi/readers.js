@@ -167,10 +167,14 @@ function createReaders(execlib,FileOperation,util) {
       this.close();
       return;
     }
-    rec = parser.fileToData(record);
-    if(lib.defined(rec)){
-      this.result++;
-      this.notify(rec);
+    try {
+      rec = parser.fileToData(record);
+      if(lib.defined(rec)){
+        this.result++;
+        this.notify(rec);
+      }
+    } catch (e) {
+      this.fail(e);
     }
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
@@ -190,7 +194,11 @@ function createReaders(execlib,FileOperation,util) {
     this.close();
   };
   ParsedFileReader.prototype.onWholeReadData = function (parser, buff) {
-    this.result = parser.fileToData(buff);
+    try {
+      this.result = parser.fileToData(buff);
+    } catch(e) {
+      this.fail(e);
+    }
   };
   ParsedFileReader.prototype.readVariableLengthRecords = function (parser, offsetobj) {
     var buff = new Buffer(1050);
@@ -208,12 +216,16 @@ function createReaders(execlib,FileOperation,util) {
       return;
     }
     buff = buff.length === bytesread ? buff : buff.slice(0, bytesread);
-    var records = parser.fileToData(buff);
-    //console.log('records', records);
-    //console.log(records.length, 'records');
-    records.forEach(this.notify.bind(this));
-    offsetobj.offset+=bytesread;
-    this.readVariableLengthRecords(parser, offsetobj);
+    try {
+      var records = parser.fileToData(buff);
+      //console.log('records', records);
+      //console.log(records.length, 'records');
+      records.forEach(this.notify.bind(this));
+      offsetobj.offset+=bytesread;
+      this.readVariableLengthRecords(parser, offsetobj);
+    } catch (e) {
+      this.fail(e);
+    }
   };
 
   function HRFReader(filereader, filesize, parser) {
@@ -303,10 +315,14 @@ function createReaders(execlib,FileOperation,util) {
       this.destroy();
       return;
     }
-    rec = this.parser.fileToData(record);
-    if(lib.defined(rec)){
-      this.reader.result++;
-      this.reader.notify(rec);
+    try {
+      rec = this.parser.fileToData(record);
+      if(lib.defined(rec)){
+        this.reader.result++;
+        this.reader.notify(rec);
+      }
+    } catch (e) {
+      this.parser.fail(e);
     }
   };
   HRFReader.prototype.finalize = function () {
