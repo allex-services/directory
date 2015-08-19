@@ -10,6 +10,8 @@ function createTransmitFileTask(execlib){
   function TransmitFileTask(prophash){
     SinkTask.call(this,prophash);
     this.sink = prophash.sink;
+    this.sinkState = null;
+    this.stateReader = null;
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
     this.remotefilename = prophash.remotefilename || prophash.filename;
@@ -45,6 +47,14 @@ function createTransmitFileTask(execlib){
     this.remotefilename = null;
     this.filename = null;
     this.ipaddress = null;
+    if (this.stateReader) {
+      this.stateReader.destroy();
+    }
+    this.stateReader = null;
+    if (this.sinkState) {
+      this.sinkState.destroy();
+    }
+    this.sinkState = null;
     this.sink = null;
     SinkTask.prototype.__cleanUp.call(this);
   };
@@ -76,10 +86,11 @@ function createTransmitFileTask(execlib){
   TransmitFileTask.prototype.onUploadFilePath = function (uploadfilepath) {
     this.log('onUploadFilePath', uploadfilepath);
     this.remotefilename = uploadfilepath;
-    taskRegistry.run('readState',{
-      state: taskRegistry.run('materializeState',{
-        sink: this.sink
-      }),
+    this.sinkState = taskRegistry.run('materializeState',{
+      sink: this.sink
+    });
+    this.stateReader = taskRegistry.run('readState',{
+      state: this.sinkState,
       name: ['uploads',uploadfilepath],
       cb: this.onWriteConfirmed.bind(this)
     });

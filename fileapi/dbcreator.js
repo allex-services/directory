@@ -21,13 +21,17 @@ function createHandler(execlib, util) {
   }
   lib.inherit(FileQ,lib.Fifo);
   FileQ.prototype.destroy = function () {
+    //console.log('FileQ', this.name, 'dying, associated database', this.database.rootpath, this.database.closingDefer ? 'should die as well' : 'will keep on living');
     this.database.remove(this.name);
     this.activeReaders = null;
     this.writePromise = null;
     this.path = null;
     this.name = null;
+    if (this.database.closingDefer) {
+      this.database.destroy(); //and let database's destroy deal with it
+    }
     this.database = null;
-    lib.Fifo.prototype.call(this);
+    lib.Fifo.prototype.destroy.call(this);
   };
   FileQ.prototype.read = function (options, defer) {
     defer = defer || q.defer();
@@ -41,7 +45,7 @@ function createHandler(execlib, util) {
   };
   FileQ.prototype.handleReader = function (reader) {
     if (this.writePromise) {
-      this.push(reader);
+      this.push({item:reader,type:'reader'});
     }else{
       this.activeReaders++;
       reader.defer.promise.then(this.readerDown.bind(this));
@@ -50,9 +54,13 @@ function createHandler(execlib, util) {
   };
   FileQ.prototype.handleWriter = function (writer) {
     if (this.writePromise) {
-      this.push(writer);
+      this.push({item:writer,type:'writer'});
     }else{
       this.writePromise = writer.defer.promise;
+      if (!(this.writePromise && this.writePromise.then)) {
+        console.log('what the @! is writer defer?', writer.defer);
+        process.exit(1);
+      }
       this.writePromise.then(this.writerDown.bind(this));
       writer.go();
     }
@@ -78,7 +86,21 @@ function createHandler(execlib, util) {
     this.handleQ();
   };
   FileQ.prototype.handleQ = function () {
-    console.log('time for next');
+    //console.log(this.name, 'time for next', this.length);
+    if (this.length < 1) {
+      this.destroy();
+      return;
+    }
+    var j = this.pop();
+    switch (j.type) {
+      case 'reader':
+        return handleReader(j.item);
+      case 'writer':
+        return handleWriter(j.item);
+      default:
+        lib.runNext(this.handleQ.bind(this));
+        break;
+    }
   };
 
   function FileDataBase(rootpath){
@@ -89,20 +111,30 @@ function createHandler(execlib, util) {
   }
   lib.inherit(FileDataBase,lib.Map);
   FileDataBase.prototype.destroy = function () {
+    if(this.closingDefer) {
+      if(this.count){
+        if (this.closingDefer.notify) {
+          this.closingDefer.notify(this.count);
+        }
+        return;
+      }
+      if (this.closingDefer.resolve) {
+        this.closingDefer.resolve(true);
+      }
+    }
     if (this.changed) {
       this.changed.destruct();
     }
     this.changed = null;
-    if(this.closingDefer) {
-      if(this.count){
-        this.closingDefer.notify(this.count);
-        return;
-      }
-      this.closingDefer.resolve(true);
-    }
-    this.rootpath = null;
     this.closingDefer = null;
+    this.count = null;
+    this.rootpath = null;
     lib.Map.prototype.destroy.call(this);
+    //console.log('FileDataBase destroying');
+  };
+  FileDataBase.prototype.begin = function (txnpath) {
+    var txnid = lib.uid();
+    return new FileDataBaseTxn(txnid, txnpath,this);
   };
   FileDataBase.prototype.read = function (name, options, defer) {
     if(this.closingDefer){
@@ -122,8 +154,45 @@ function createHandler(execlib, util) {
     }
     return this.fileQ(name).write(options,defer);
   };
+  FileDataBase.prototype.close = function (defer) {
+    this.closingDefer = defer || true;
+    if (this.count<1) {
+      this.destroy();
+    }
+  };
   FileDataBase.prototype.fileQ = function (name) {
     return new FileQ(this, name, util.pathForFilename(this.rootpath,name));
+  };
+
+  function FileDataBaseTxn(id, path, db) {
+    this.id = id;
+    this.path = path;
+    this.parentDB = db;
+    FileDataBase.call(this, this.parentDB.rootpath+'_'+id);
+    this.parentDB.add('txn:'+this.id);
+  }
+  lib.inherit(FileDataBaseTxn, FileDataBase);
+  FileDataBaseTxn.prototype.commit = FileDataBase.prototype.close; //just terminology
+  FileDataBaseTxn.prototype.destroy = function () {
+    FileDataBase.prototype.destroy.call(this);
+    if (this.rootpath === null) {
+      this.postMortem();
+    }
+  };
+  FileDataBase.prototype.postMortem = function () {
+    var d = q.defer();
+    this.parentDB.write(this.path, {txndirname: this.parentDB.rootpath+'_'+this.id}, d);
+    d.promise.done(
+      this.onTxnDirDone.bind(this)
+    );
+  };
+  FileDataBase.prototype.onTxnDirDone = function () {
+    this.parentDB.remove('txn:'+this.id);
+    if (this.parentDB.closingDefer) {
+      this.parentDB.destroy();
+    }
+    this.id = null;
+    this.parentDB = null;
   };
 
   return FileDataBase;

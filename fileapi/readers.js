@@ -154,7 +154,12 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onSizeForParser = function (parser, size) {
-    (new HRFReader(this, size, parser)).go();
+    var hrfr = new HRFReader(this, size, parser);
+    hrfr.defer.promise.done(
+      this.destroy.bind(this),
+      this.fail.bind(this)
+    );
+    (hrfr).go();
   };
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
     var rec;
@@ -178,7 +183,7 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
-    //console.log('onOpenForRawRead');
+    //console.log(this.name, 'onOpenForRawRead', start, quantity);
     this.read(start, quantity).done(
       this.onRawReadDone.bind(this),
       this.fail.bind(this),
@@ -208,7 +213,7 @@ function createReaders(execlib,FileOperation,util) {
      );
   };
   ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, offsetobj, bytesread) {
-    //console.log('bytes read', bytesread);
+    //console.log('csv bytes read', bytesread);
     if (!bytesread) {
       parser.destroy();
       this.result = offsetobj.offset;
@@ -309,6 +314,7 @@ function createReaders(execlib,FileOperation,util) {
   };
   HRFReader.prototype.onRecord = function (record) {
     var rec;
+    //console.log('onRecord', record);
     if (!record) {
       this.finalize();
       this.reader.close();
@@ -322,7 +328,8 @@ function createReaders(execlib,FileOperation,util) {
         this.reader.notify(rec);
       }
     } catch (e) {
-      this.parser.fail(e);
+      console.log('ERROR in parsing record',record,':',e);
+      this.reader.fail(e);
     }
   };
   HRFReader.prototype.finalize = function () {
@@ -424,10 +431,12 @@ function createReaders(execlib,FileOperation,util) {
     };
   };
   DirReader.prototype.oneDone = function () {
+    console.log(this.name,'oneDone');
     this.result ++;
     this.checkDone();
   };
   DirReader.prototype.oneFailed = function () {
+    console.log(this.name,'oneFailed');
     this.filecount --;
     this.checkDone();
   };
@@ -437,6 +446,7 @@ function createReaders(execlib,FileOperation,util) {
       d.resolve(false);
       return d.promise;
     }
+    console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options.filecontents);
     if (this.parserInfo.needed && this.options.filecontents.modulename === '*') {
       rd = q.defer();
       metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
@@ -451,6 +461,7 @@ function createReaders(execlib,FileOperation,util) {
     return d.promise;
   };
   DirReader.prototype.onMeta = function (defer, filename, meta) {
+    console.log(this.name, 'onMeta', filename, meta);
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
@@ -481,7 +492,8 @@ function createReaders(execlib,FileOperation,util) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
       d.promise.done(
-        reportobj.defer.resolve.bind(reportobj.defer,true),
+        //reportobj.defer.resolve.bind(reportobj.defer,true),
+        this.onParsedFile.bind(this, reportobj),
         this.fail.bind(this),
         this.onParsedRecord.bind(this, reportobj.data || {})
       );
@@ -490,6 +502,11 @@ function createReaders(execlib,FileOperation,util) {
       this.notify(reportobj.data || filename);
       reportobj.defer.resolve(true);
     }
+  };
+  DirReader.prototype.onParsedFile = function (reportobj) {
+    this.parserInfo.instance.destroy();
+    this.parserInfo.instance = null;
+    reportobj.defer.resolve(true);
   };
   DirReader.prototype.onParsedRecord = function (statsobj, parsedrecord) {
     //console.log('notifying', parsedrecord);

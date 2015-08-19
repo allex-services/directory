@@ -30,6 +30,7 @@ function createFileApi(execlib){
 module.exports = createFileApi;
 
 },{"./dbcreator":4,"./util":7}],4:[function(require,module,exports){
+(function (process){
 function createHandler(execlib, util) {
   'use strict';
   var lib = execlib.lib,
@@ -53,13 +54,17 @@ function createHandler(execlib, util) {
   }
   lib.inherit(FileQ,lib.Fifo);
   FileQ.prototype.destroy = function () {
+    //console.log('FileQ', this.name, 'dying, associated database', this.database.rootpath, this.database.closingDefer ? 'should die as well' : 'will keep on living');
     this.database.remove(this.name);
     this.activeReaders = null;
     this.writePromise = null;
     this.path = null;
     this.name = null;
+    if (this.database.closingDefer) {
+      this.database.destroy(); //and let database's destroy deal with it
+    }
     this.database = null;
-    lib.Fifo.prototype.call(this);
+    lib.Fifo.prototype.destroy.call(this);
   };
   FileQ.prototype.read = function (options, defer) {
     defer = defer || q.defer();
@@ -73,7 +78,7 @@ function createHandler(execlib, util) {
   };
   FileQ.prototype.handleReader = function (reader) {
     if (this.writePromise) {
-      this.push(reader);
+      this.push({item:reader,type:'reader'});
     }else{
       this.activeReaders++;
       reader.defer.promise.then(this.readerDown.bind(this));
@@ -82,9 +87,13 @@ function createHandler(execlib, util) {
   };
   FileQ.prototype.handleWriter = function (writer) {
     if (this.writePromise) {
-      this.push(writer);
+      this.push({item:writer,type:'writer'});
     }else{
       this.writePromise = writer.defer.promise;
+      if (!(this.writePromise && this.writePromise.then)) {
+        console.log('what the @! is writer defer?', writer.defer);
+        process.exit(1);
+      }
       this.writePromise.then(this.writerDown.bind(this));
       writer.go();
     }
@@ -110,7 +119,21 @@ function createHandler(execlib, util) {
     this.handleQ();
   };
   FileQ.prototype.handleQ = function () {
-    console.log('time for next');
+    //console.log(this.name, 'time for next', this.length);
+    if (this.length < 1) {
+      this.destroy();
+      return;
+    }
+    var j = this.pop();
+    switch (j.type) {
+      case 'reader':
+        return handleReader(j.item);
+      case 'writer':
+        return handleWriter(j.item);
+      default:
+        lib.runNext(this.handleQ.bind(this));
+        break;
+    }
   };
 
   function FileDataBase(rootpath){
@@ -121,20 +144,30 @@ function createHandler(execlib, util) {
   }
   lib.inherit(FileDataBase,lib.Map);
   FileDataBase.prototype.destroy = function () {
+    if(this.closingDefer) {
+      if(this.count){
+        if (this.closingDefer.notify) {
+          this.closingDefer.notify(this.count);
+        }
+        return;
+      }
+      if (this.closingDefer.resolve) {
+        this.closingDefer.resolve(true);
+      }
+    }
     if (this.changed) {
       this.changed.destruct();
     }
     this.changed = null;
-    if(this.closingDefer) {
-      if(this.count){
-        this.closingDefer.notify(this.count);
-        return;
-      }
-      this.closingDefer.resolve(true);
-    }
-    this.rootpath = null;
     this.closingDefer = null;
+    this.count = null;
+    this.rootpath = null;
     lib.Map.prototype.destroy.call(this);
+    //console.log('FileDataBase destroying');
+  };
+  FileDataBase.prototype.begin = function (txnpath) {
+    var txnid = lib.uid();
+    return new FileDataBaseTxn(txnid, txnpath,this);
   };
   FileDataBase.prototype.read = function (name, options, defer) {
     if(this.closingDefer){
@@ -154,8 +187,45 @@ function createHandler(execlib, util) {
     }
     return this.fileQ(name).write(options,defer);
   };
+  FileDataBase.prototype.close = function (defer) {
+    this.closingDefer = defer || true;
+    if (this.count<1) {
+      this.destroy();
+    }
+  };
   FileDataBase.prototype.fileQ = function (name) {
     return new FileQ(this, name, util.pathForFilename(this.rootpath,name));
+  };
+
+  function FileDataBaseTxn(id, path, db) {
+    this.id = id;
+    this.path = path;
+    this.parentDB = db;
+    FileDataBase.call(this, this.parentDB.rootpath+'_'+id);
+    this.parentDB.add('txn:'+this.id);
+  }
+  lib.inherit(FileDataBaseTxn, FileDataBase);
+  FileDataBaseTxn.prototype.commit = FileDataBase.prototype.close; //just terminology
+  FileDataBaseTxn.prototype.destroy = function () {
+    FileDataBase.prototype.destroy.call(this);
+    if (this.rootpath === null) {
+      this.postMortem();
+    }
+  };
+  FileDataBase.prototype.postMortem = function () {
+    var d = q.defer();
+    this.parentDB.write(this.path, {txndirname: this.parentDB.rootpath+'_'+this.id}, d);
+    d.promise.done(
+      this.onTxnDirDone.bind(this)
+    );
+  };
+  FileDataBase.prototype.onTxnDirDone = function () {
+    this.parentDB.remove('txn:'+this.id);
+    if (this.parentDB.closingDefer) {
+      this.parentDB.destroy();
+    }
+    this.id = null;
+    this.parentDB = null;
   };
 
   return FileDataBase;
@@ -163,7 +233,8 @@ function createHandler(execlib, util) {
 
 module.exports = createHandler;
 
-},{"./fileoperationcreator":5,"./readers":6,"./writers":8}],5:[function(require,module,exports){
+}).call(this,require('_process'))
+},{"./fileoperationcreator":5,"./readers":6,"./writers":8,"_process":26}],5:[function(require,module,exports){
 var fs = require('fs');
 function createFileOperation(execlib, util) {
   'use strict';
@@ -175,6 +246,11 @@ function createFileOperation(execlib, util) {
   //FileOperation gets destroyed without opening
   //the file...
   function FileOperation(name, path, defer) {
+    if (!defer.promise) {
+      console.trace();
+      console.log(defer);
+      throw "KOJ TI MOJ DA MI SALJES OVO ZA DEFER?@!";
+    }
     this.originalFS = null;
     this.name = name;
     this.path = path;
@@ -199,6 +275,7 @@ function createFileOperation(execlib, util) {
       if(this.error){
         this.defer.reject(this.error);
       }else{
+        console.log(this.name,'resolving its defer with',this.result);
         this.defer.resolve(this.result);
       }
     }
@@ -290,7 +367,13 @@ function createFileOperation(execlib, util) {
       this.destroy();
     }
   };
-  FileOperation.prototype.onClosed = function () {
+  FileOperation.prototype.onClosed = function (e) {
+    if (e) {
+      console.trace();
+      console.error(e.stack);
+      console.error(e);
+      this.error = e;
+    }
     this.fh = null;
     this.destroy();
   };
@@ -367,12 +450,12 @@ function createReaders(execlib,FileOperation,util) {
     this.read(startfrom, size, defer);
   };
 
-  FileReader.prototype.readInFixedChunks = function (recordsize, processfn) {
+  FileReader.prototype.readInFixedChunks = function (recordsize, processfn) { 
     this.size().done(this.onSizeForFixedChunks.bind(this, recordsize, processfn));
   };
   FileReader.prototype.onSizeForFixedChunks = function (recordsize, processfn, size) {
     //console.log('onSizeForFixedChunks', size, recordsize);
-    if (size%recordsize) {
+    if ((size - headersize - footersize) % recordsize) {
       this.fail(new lib.Error('RECORD_SIZE_MISMATCH',this.name+' is of size '+size+' record of size '+recordsize+' cannot fit'));
       return;
     }
@@ -435,8 +518,9 @@ function createReaders(execlib,FileOperation,util) {
       if ('number' === tord) {
         if (!(this.options && this.options.raw)) {
           this.result = 0;
-          this.readInFixedChunks(delim, this.onRecordRead.bind(this, parser));
+          this.size().done(this.onSizeForParser.bind(this, parser));
         } else {
+          parser.destroy(); //parser used only to read recordDelimiter
           start = this.options.hasOwnProperty('startfrom') ? this.options.startfrom * delim : null;
           quantity = this.options.hasOwnProperty('quantity') ? this.options.quantity * delim : null;
           this.openDefer.promise.then(this.onOpenForRawRead.bind(this, start, quantity));
@@ -456,6 +540,9 @@ function createReaders(execlib,FileOperation,util) {
       );
     }
   };
+  ParsedFileReader.prototype.onSizeForParser = function (parser, size) {
+    (new HRFReader(this, size, parser)).go();
+  };
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
     var rec;
     if (!record) {
@@ -467,10 +554,14 @@ function createReaders(execlib,FileOperation,util) {
       this.close();
       return;
     }
-    rec = parser.fileToData(record);
-    if(lib.defined(rec)){
-      this.result++;
-      this.notify(rec);
+    try {
+      rec = parser.fileToData(record);
+      if(lib.defined(rec)){
+        this.result++;
+        this.notify(rec);
+      }
+    } catch (e) {
+      this.fail(e);
     }
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
@@ -490,7 +581,11 @@ function createReaders(execlib,FileOperation,util) {
     this.close();
   };
   ParsedFileReader.prototype.onWholeReadData = function (parser, buff) {
-    this.result = parser.fileToData(buff);
+    try {
+      this.result = parser.fileToData(buff);
+    } catch(e) {
+      this.fail(e);
+    }
   };
   ParsedFileReader.prototype.readVariableLengthRecords = function (parser, offsetobj) {
     var buff = new Buffer(1050);
@@ -502,17 +597,129 @@ function createReaders(execlib,FileOperation,util) {
   ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, offsetobj, bytesread) {
     //console.log('bytes read', bytesread);
     if (!bytesread) {
+      parser.destroy();
       this.result = offsetobj.offset;
       this.close();
       return;
     }
     buff = buff.length === bytesread ? buff : buff.slice(0, bytesread);
-    var records = parser.fileToData(buff);
-    //console.log('records', records);
-    //console.log(records.length, 'records');
-    records.forEach(this.notify.bind(this));
-    offsetobj.offset+=bytesread;
-    this.readVariableLengthRecords(parser, offsetobj);
+    try {
+      var records = parser.fileToData(buff);
+      //console.log('records', records);
+      //console.log(records.length, 'records');
+      records.forEach(this.notify.bind(this));
+      offsetobj.offset+=bytesread;
+      this.readVariableLengthRecords(parser, offsetobj);
+    } catch (e) {
+      this.fail(e);
+    }
+  };
+
+  function HRFReader(filereader, filesize, parser) {
+    lib.AsyncJob.call(this);
+    this.reader = filereader;
+    this.parser = parser;
+    this.filesize = filesize;
+    this.header = parser.headerLength ? new Buffer(parser.headerLength) : null;
+    this.record = parser.recordDelimiter ? new Buffer(parser.recordDelimiter) : null;
+    this.footer = parser.footerLength ? new Buffer(parser.footerLength) : null;
+    this.recordstoread = ~~((this.filesize - this.headerLength() - this.footerLength()) / this.parser.recordDelimiter);
+    console.log(this.reader.name, 'recordstoread', this.recordstoread);
+  }
+  lib.inherit(HRFReader, lib.AsyncJob);
+  HRFReader.prototype.destroy = function () {
+    this.parser.destroy();
+    this.recordstoread = null;
+    this.footer = null;
+    this.record = null;
+    this.header = null;
+    this.filesize = null;
+    this.parser = null;
+    this.reader = null;
+    lib.AsyncJob.prototype.destroy.call(this);
+  };
+  HRFReader.prototype.proc = function () {
+    if (!this.sizesOK()) {
+      console.error(this.reader.name+' is of size '+this.filesize+' record of size '+this.parser.recordDelimiter+' cannot fit');
+      this.fail(new lib.Error('RECORD_SIZE_MISMATCH',this.name+' is of size '+this.size+' record of size '+this.parser.recordDelimiter+' cannot fit'));
+      return;
+    }
+    this.reader.openDefer.promise.done(
+      this.read.bind(this),
+      this.fail.bind(this)
+    );
+    this.reader.open();
+  }
+  HRFReader.prototype.headerLength = function () {
+    return this.parser.headerLength || 0;
+  };
+  HRFReader.prototype.footerLength = function () {
+    return this.parser.footerLength || 0;
+  };
+  HRFReader.prototype.sizesOK = function () {
+    return ((this.filesize - (this.headerLength()) - (this.footerLength())) % this.parser.recordDelimiter) === 0;
+  };
+  HRFReader.prototype.read = function () {
+    var buff;
+    if (this.header) {
+      buff = this.header;
+    } else if (this.record){
+      buff = this.record;
+    } else if (this.footer){
+      buff = this.footer;
+    }
+    if (!buff) {
+      this.destroy();
+    } else {
+      fs.read(this.reader.fh, buff, 0, buff.length, null, this.onRead.bind(this));
+    }
+  };
+  HRFReader.prototype.onRead = function (err, bytesread, buffer) {
+    if (buffer === this.header) {
+      this.header = null;
+      this.parser.onHeader(buffer);
+      //set this.record to new Buffer(this.parser.recordDelimiter)
+    } else if (buffer === this.record) {
+      this.recordstoread --;
+      if (this.recordstoread < 1) {
+        this.record = null;
+      }
+      this.onRecord(buffer);
+      if (!this.record) {
+        this.finalize();
+      }
+    } else if (buffer === this.footer) {
+      this.footer = null;
+      this.parser.onFooter(buffer);
+    }
+    this.read();
+  };
+  HRFReader.prototype.onRecord = function (record) {
+    var rec;
+    //console.log('onRecord', record);
+    if (!record) {
+      this.finalize();
+      this.reader.close();
+      this.destroy();
+      return;
+    }
+    try {
+      rec = this.parser.fileToData(record);
+      if(lib.defined(rec)){
+        this.reader.result++;
+        this.reader.notify(rec);
+      }
+    } catch (e) {
+      console.log('ERROR in parsing record',record,':',e);
+      this.reader.fail(e);
+    }
+  };
+  HRFReader.prototype.finalize = function () {
+    var rec = this.parser.finalize();
+    if (lib.defined(rec)) {
+      this.reader.result++;
+      this.reader.notify(rec);
+    }
   };
 
   function DirReader(name, path, options, defer) {
@@ -850,7 +1057,9 @@ module.exports = createUtil;
 }).call(this,require('_process'))
 },{"_process":26,"fs":20,"mkdirp":11,"path":25}],8:[function(require,module,exports){
 (function (Buffer){
-var fs = require('fs');
+var fs = require('fs'),
+  child_process = require('child_process'),
+  Path = require('path');
 function createWriters(execlib,FileOperation) {
   'use strict';
   var lib = execlib.lib,
@@ -887,7 +1096,7 @@ function createWriters(execlib,FileOperation) {
     );
   };
   FileWriter.prototype.readyToOpen = function () {
-    console.log('readyToOpen', arguments);
+    console.log(this.name, 'readyToOpen', arguments);
     if(!this.active){
       this.active = true;
       this.open();
@@ -912,6 +1121,7 @@ function createWriters(execlib,FileOperation) {
     return defer.promise;
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
+    console.log(this.name, 'writing', chunk.length);
     if(chunk instanceof Buffer){
       fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
@@ -1027,14 +1237,61 @@ function createWriters(execlib,FileOperation) {
     ParsedFileWriter.prototype.go.call(this);
   };
 
+  function TxnCommiter(txndirname, name, path, defer) {
+    console.log('new TxnCommiter', txndirname, name, path);
+    FileOperation.call(this, name, path, defer);
+    this.txndirname = txndirname;
+    this.affectedfilepaths = null;
+  }
+  lib.inherit(TxnCommiter, FileOperation);
+  TxnCommiter.prototype.destroy = function () {
+    this.affectedfilepaths = null;
+    this.txndirname = null;
+    FileOperation.prototype.destroy.call(this);
+  };
+  TxnCommiter.prototype.go = function () {
+    child_process.exec('mkdir -p '+Path.dirname(this.path), this.onMkDir.bind(this));
+    //child_process.exec('find '+this.txndirname+' -type f', this.onFindResults.bind(this));
+  };
+  /*
+  TxnCommiter.prototype.onFindResults = function(err, stdout, stderr) {
+    if (err) {
+      this.fail(err);
+      return;
+    }
+    var results = stdout.trim().split("\n");
+    this.result = results.length;
+    this.affectedfilepaths = results.map(Path.relative.bind(Path,this.txndirname));
+    console.log('cp -rp '+Path.join(this.txndirname, this.name)+' '+this.path);
+    child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+this.path, this.onCpRp.bind(this));
+  };
+  */
+  TxnCommiter.prototype.onMkDir = function (err, stdio, stderr) {
+    child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+Path.dirname(this.path), this.onCpRp.bind(this));
+  };
+  TxnCommiter.prototype.onCpRp = function () {
+    var r = child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
+  };
+  TxnCommiter.prototype.onRmRf = function () {
+    console.log('onRmRf');
+    this.destroy();
+  };
+
   function writerFactory(name, path, options, defer) {
+    if (options.txndirname) {
+      console.log('for',name,'returning new TxnCommiter');
+      return new TxnCommiter(options.txndirname, name, path, defer);
+    }
     if (options.modulename){
       if (options.typed) {
+        console.log('for',name,'returning new ParsedFileWriter');
         return new ParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       } else {
+        console.log('for',name,'returning new PerFileParsedFileWriter');
         return new PerFileParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       }
     }
+    console.log('for',name,'returning new RawFileWriter');
     return new RawFileWriter(name, path, defer);
   }
   return writerFactory;
@@ -1043,7 +1300,7 @@ function createWriters(execlib,FileOperation) {
 module.exports = createWriters;
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":21,"fs":20}],9:[function(require,module,exports){
+},{"buffer":21,"child_process":20,"fs":20,"path":25}],9:[function(require,module,exports){
 module.exports = {
 };
 
@@ -1511,6 +1768,8 @@ function createTransmitFileTask(execlib){
   function TransmitFileTask(prophash){
     SinkTask.call(this,prophash);
     this.sink = prophash.sink;
+    this.sinkState = null;
+    this.stateReader = null;
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
     this.remotefilename = prophash.remotefilename || prophash.filename;
@@ -1546,6 +1805,14 @@ function createTransmitFileTask(execlib){
     this.remotefilename = null;
     this.filename = null;
     this.ipaddress = null;
+    if (this.stateReader) {
+      this.stateReader.destroy();
+    }
+    this.stateReader = null;
+    if (this.sinkState) {
+      this.sinkState.destroy();
+    }
+    this.sinkState = null;
     this.sink = null;
     SinkTask.prototype.__cleanUp.call(this);
   };
@@ -1577,10 +1844,11 @@ function createTransmitFileTask(execlib){
   TransmitFileTask.prototype.onUploadFilePath = function (uploadfilepath) {
     this.log('onUploadFilePath', uploadfilepath);
     this.remotefilename = uploadfilepath;
-    taskRegistry.run('readState',{
-      state: taskRegistry.run('materializeState',{
-        sink: this.sink
-      }),
+    this.sinkState = taskRegistry.run('materializeState',{
+      sink: this.sink
+    });
+    this.stateReader = taskRegistry.run('readState',{
+      state: this.sinkState,
       name: ['uploads',uploadfilepath],
       cb: this.onWriteConfirmed.bind(this)
     });
@@ -1666,14 +1934,11 @@ var rootParent = {}
  * get the Object implementation, which is slower but will work correctly.
  */
 Buffer.TYPED_ARRAY_SUPPORT = (function () {
-  function Foo () {}
   try {
     var buf = new ArrayBuffer(0)
     var arr = new Uint8Array(buf)
     arr.foo = function () { return 42 }
-    arr.constructor = Foo
     return arr.foo() === 42 && // typed array instances can be augmented
-        arr.constructor === Foo && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
         new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {

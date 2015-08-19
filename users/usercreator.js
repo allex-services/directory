@@ -31,6 +31,9 @@ function createUser(execlib,ParentUser){
 
   function FileUploadServer(user,options){
     ParentUser.prototype.TcpTransmissionServer.call(this,user,options);
+    if (!options.txn) {
+      throw new lib.Error('NO_DIRECTORY_TRANSACTION_READY_FOR_FILE_TRANSMISSION');
+    }
     if (!options.writer) {
       throw new lib.Error('NO_WRITER_READY_FOR_FILE_TRANSMISSION');
     }
@@ -40,8 +43,8 @@ function createUser(execlib,ParentUser){
     this.uploadpath = ['uploads',this.options.filename];
     this.written = 0;
     this.options.writer.defer.promise.then(
-      this.onSuccess.bind(this),
-      this.onFailure.bind(this)
+      this.onSuccess.bind(this, options.txn),
+      this.onFailure.bind(this, options.txn)
     );
   }
   lib.inherit(FileUploadServer,ParentUser.prototype.TcpTransmissionServer);
@@ -57,11 +60,21 @@ function createUser(execlib,ParentUser){
     this.uploadpath = null;
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
-  FileUploadServer.prototype.onSuccess = function () {
+  FileUploadServer.prototype.onSuccess = function (txn) {
+    var d = q.defer();
+    txn.commit(d);
+    d.promise.done(this.onSuccessDone.bind(this));
+  };
+  FileUploadServer.prototype.onFailure = function (txn) {
+    var d = q.defer();
+    txn.commit(d);
+    d.promise.done(this.onFailureDone.bind(this));
+  };
+  FileUploadServer.prototype.onSuccessDone = function () {
     this.user.state.set(this.uploadpath, '*');
     this.destroy();
   };
-  FileUploadServer.prototype.onFailure = function () {
+  FileUploadServer.prototype.onFailureDone = function () {
     this.user.state.set(this.uploadpath, '!');
     this.destroy();
   };
@@ -222,7 +235,7 @@ function createUser(execlib,ParentUser){
     }
   };
   User.prototype.requestUpload = function (options, defer) {
-    var metauploadpath, writemetadatadefer;
+    var txn, metauploadpath, writemetadatadefer;
     if(!options.filename){
       //for now, reject. If DirectoryService User finds out how to 
       //handle other transmission scenarios, continue from here.
@@ -234,35 +247,35 @@ function createUser(execlib,ParentUser){
       return;
     }
     if (options.metadata) {
+      txn = this.__service.db.begin(Path.dirname(options.filename));
       metauploadpath = this.metaPath(options.filename);
       writemetadatadefer = q.defer();
       //console.log('metauploadpath', metauploadpath);
-      this.write(metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
+      this.writeOnDB(txn, metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
       writemetadatadefer.promise.done(
-        this.realizeUploadRequest.bind(this, options, defer),
+        this.realizeUploadRequest.bind(this, txn, options, defer),
         defer.reject.bind(defer)
       );
     } else {
-      this.realizeUploadRequest(options, defer);
+      this.realizeUploadRequest(txn, options, defer);
     }
   };
-  User.prototype.realizeUploadRequest = function (options, defer) {
+  User.prototype.realizeUploadRequest = function (txn, options, defer) {
     if(this._checkOnWaitingUploads(options,defer)){
       return;
     }
     if(this._checkOnServiceUploads(options,defer)){
       return;
     }
-    var writedefer = q.defer();
-    this.__service.db.write(options.filename, {}, writedefer).done(
-      this.onUploadReady.bind(this, options, defer, writedefer),
+    txn.write(options.filename, {}, q.defer()).done( //anonymous defer here will later be found in writer.defer
+      this.onUploadReady.bind(this, txn, options, defer),
       defer.reject.bind(defer)
     );
-    //ParentUser.prototype.requestTcpTransmission.call(this,options,defer);
   };
-  User.prototype.onUploadReady = function (options, requestdefer, writedefer, writer) {
+  User.prototype.onUploadReady = function (txn, options, requestdefer, writer) {
     //console.log('onUploadReady', options);
     requestdefer.notify(options.filename);
+    options.txn = txn;
     options.writer = writer;
     options.serverCtor = FileUploadServer;
     ParentUser.prototype.requestTcpTransmission.call(this, options, requestdefer);
@@ -282,12 +295,15 @@ function createUser(execlib,ParentUser){
     this.__service.db.read(filename, options, defer);
   };
   User.prototype.write = function (filename, parserinfo, data, defer) {
+    this.writeOnDB(this.__service.db, filename, parserinfo, data, defer);
+  };
+  User.prototype.writeOnDB = function (db, filename, parserinfo, data, defer) {
     if(data===null){
       console.log('Y data null?');
       defer.reject(new lib.Error('WILL_NOT_WRITE_EMPTY_FILE','fs touch not supported'));
       return;
     }
-    this.__service.db.write(filename, parserinfo, defer).then(function(writer){
+    db.write(filename, parserinfo, defer).then(function(writer){
       writer.writeAll(data);
     });
   };

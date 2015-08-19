@@ -1,4 +1,6 @@
-var fs = require('fs');
+var fs = require('fs'),
+  child_process = require('child_process'),
+  Path = require('path');
 function createWriters(execlib,FileOperation) {
   'use strict';
   var lib = execlib.lib,
@@ -35,7 +37,7 @@ function createWriters(execlib,FileOperation) {
     );
   };
   FileWriter.prototype.readyToOpen = function () {
-    console.log('readyToOpen', arguments);
+    console.log(this.name, 'readyToOpen', arguments);
     if(!this.active){
       this.active = true;
       this.open();
@@ -60,6 +62,7 @@ function createWriters(execlib,FileOperation) {
     return defer.promise;
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
+    console.log(this.name, 'writing', chunk.length);
     if(chunk instanceof Buffer){
       fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
@@ -175,14 +178,61 @@ function createWriters(execlib,FileOperation) {
     ParsedFileWriter.prototype.go.call(this);
   };
 
+  function TxnCommiter(txndirname, name, path, defer) {
+    console.log('new TxnCommiter', txndirname, name, path);
+    FileOperation.call(this, name, path, defer);
+    this.txndirname = txndirname;
+    this.affectedfilepaths = null;
+  }
+  lib.inherit(TxnCommiter, FileOperation);
+  TxnCommiter.prototype.destroy = function () {
+    this.affectedfilepaths = null;
+    this.txndirname = null;
+    FileOperation.prototype.destroy.call(this);
+  };
+  TxnCommiter.prototype.go = function () {
+    child_process.exec('mkdir -p '+Path.dirname(this.path), this.onMkDir.bind(this));
+    //child_process.exec('find '+this.txndirname+' -type f', this.onFindResults.bind(this));
+  };
+  /*
+  TxnCommiter.prototype.onFindResults = function(err, stdout, stderr) {
+    if (err) {
+      this.fail(err);
+      return;
+    }
+    var results = stdout.trim().split("\n");
+    this.result = results.length;
+    this.affectedfilepaths = results.map(Path.relative.bind(Path,this.txndirname));
+    console.log('cp -rp '+Path.join(this.txndirname, this.name)+' '+this.path);
+    child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+this.path, this.onCpRp.bind(this));
+  };
+  */
+  TxnCommiter.prototype.onMkDir = function (err, stdio, stderr) {
+    child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+Path.dirname(this.path), this.onCpRp.bind(this));
+  };
+  TxnCommiter.prototype.onCpRp = function () {
+    var r = child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
+  };
+  TxnCommiter.prototype.onRmRf = function () {
+    console.log('onRmRf');
+    this.destroy();
+  };
+
   function writerFactory(name, path, options, defer) {
+    if (options.txndirname) {
+      console.log('for',name,'returning new TxnCommiter');
+      return new TxnCommiter(options.txndirname, name, path, defer);
+    }
     if (options.modulename){
       if (options.typed) {
+        console.log('for',name,'returning new ParsedFileWriter');
         return new ParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       } else {
+        console.log('for',name,'returning new PerFileParsedFileWriter');
         return new PerFileParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       }
     }
+    console.log('for',name,'returning new RawFileWriter');
     return new RawFileWriter(name, path, defer);
   }
   return writerFactory;

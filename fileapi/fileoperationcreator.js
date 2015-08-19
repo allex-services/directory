@@ -9,6 +9,11 @@ function createFileOperation(execlib, util) {
   //FileOperation gets destroyed without opening
   //the file...
   function FileOperation(name, path, defer) {
+    if (!defer.promise) {
+      console.trace();
+      console.log(defer);
+      throw "KOJ TI MOJ DA MI SALJES OVO ZA DEFER?@!";
+    }
     this.originalFS = null;
     this.name = name;
     this.path = path;
@@ -33,6 +38,7 @@ function createFileOperation(execlib, util) {
       if(this.error){
         this.defer.reject(this.error);
       }else{
+        console.log(this.name,'resolving its defer with',this.result);
         this.defer.resolve(this.result);
       }
     }
@@ -124,7 +130,13 @@ function createFileOperation(execlib, util) {
       this.destroy();
     }
   };
-  FileOperation.prototype.onClosed = function () {
+  FileOperation.prototype.onClosed = function (e) {
+    if (e) {
+      console.trace();
+      console.error(e.stack);
+      console.error(e);
+      this.error = e;
+    }
     this.fh = null;
     this.destroy();
   };
