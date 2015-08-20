@@ -71,11 +71,11 @@ function createUser(execlib,ParentUser){
     d.promise.done(this.onFailureDone.bind(this));
   };
   FileUploadServer.prototype.onSuccessDone = function () {
-    this.user.state.set(this.uploadpath, '*');
+    this.user.set(this.uploadpath, '*');
     this.destroy();
   };
   FileUploadServer.prototype.onFailureDone = function () {
-    this.user.state.set(this.uploadpath, '!');
+    this.user.set(this.uploadpath, '!');
     this.destroy();
   };
   FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
@@ -88,7 +88,7 @@ function createUser(execlib,ParentUser){
   };
   FileUploadServer.prototype.onPacketWritten = function () {
     //console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
-    this.user.state.set(this.uploadpath, this.options.writer.result);
+    this.user.set(this.uploadpath, this.options.writer.result);
   };
   FileUploadServer.prototype.onTransmissionDone = function(){
     this.options.writer.close();
@@ -225,7 +225,7 @@ function createUser(execlib,ParentUser){
       this.waitinguploads.add(filename,new execSuite.ADS.listenToScalar(uploadpath,{d:this.requestTcpTransmission.bind(this,options,defer)}));
       return true;
     }
-    this.__service.state.set(uploadpath,true);
+    this.__service.set(uploadpath,true);
   };
   User.prototype.requestTcpTransmission = function (options, defer) {
     if (options.download){

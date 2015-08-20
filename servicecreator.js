@@ -22,7 +22,7 @@ function createDirectoryService(execlib,ParentServicePack){
       throw new lib.Error('propertyhash misses the path field');
     }
     fileApi.util.satisfyPath(prophash.path);
-    this.state.set('path',prophash.path);
+    this.set('path',prophash.path);
     this.db = new (fileApi.DataBase)(prophash.path);
   }
   ParentService.inherit(DirectoryService,factoryCreator);
