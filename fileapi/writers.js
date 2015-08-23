@@ -37,7 +37,7 @@ function createWriters(execlib,FileOperation) {
     );
   };
   FileWriter.prototype.readyToOpen = function () {
-    console.log(this.name, 'readyToOpen', arguments);
+    //console.log(this.name, 'readyToOpen', arguments);
     if(!this.active){
       this.active = true;
       this.open();
@@ -62,7 +62,7 @@ function createWriters(execlib,FileOperation) {
     return defer.promise;
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
-    console.log(this.name, 'writing', chunk.length);
+    //console.log(this.name, 'writing', chunk.length);
     if(chunk instanceof Buffer){
       fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
@@ -174,12 +174,12 @@ function createWriters(execlib,FileOperation) {
   }
   lib.inherit(PerFileParsedFileWriter, ParsedFileWriter);
   PerFileParsedFileWriter.prototype.go = function () {
-    console.log('should write .parserinfo');
+    //console.log('should write .parserinfo');
     ParsedFileWriter.prototype.go.call(this);
   };
 
   function TxnCommiter(txndirname, name, path, defer) {
-    console.log('new TxnCommiter', txndirname, name, path);
+    //console.log('new TxnCommiter', txndirname, name, path);
     FileOperation.call(this, name, path, defer);
     this.txndirname = txndirname;
     this.affectedfilepaths = null;
@@ -214,25 +214,25 @@ function createWriters(execlib,FileOperation) {
     var r = child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
   };
   TxnCommiter.prototype.onRmRf = function () {
-    console.log('onRmRf');
+    //console.log('onRmRf');
     this.destroy();
   };
 
   function writerFactory(name, path, options, defer) {
     if (options.txndirname) {
-      console.log('for',name,'returning new TxnCommiter');
+      //console.log('for',name,'returning new TxnCommiter');
       return new TxnCommiter(options.txndirname, name, path, defer);
     }
     if (options.modulename){
       if (options.typed) {
-        console.log('for',name,'returning new ParsedFileWriter');
+        //console.log('for',name,'returning new ParsedFileWriter');
         return new ParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       } else {
-        console.log('for',name,'returning new PerFileParsedFileWriter');
+        //console.log('for',name,'returning new PerFileParsedFileWriter');
         return new PerFileParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       }
     }
-    console.log('for',name,'returning new RawFileWriter');
+    //console.log('for',name,'returning new RawFileWriter');
     return new RawFileWriter(name, path, defer);
   }
   return writerFactory;

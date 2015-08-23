@@ -38,7 +38,7 @@ function createFileOperation(execlib, util) {
       if(this.error){
         this.defer.reject(this.error);
       }else{
-        console.log(this.name,'resolving its defer with',this.result);
+        //console.log(this.name,'resolving its defer with',this.result);
         this.defer.resolve(this.result);
       }
     }

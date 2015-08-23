@@ -242,7 +242,7 @@ function createReaders(execlib,FileOperation,util) {
     this.record = parser.recordDelimiter ? new Buffer(parser.recordDelimiter) : null;
     this.footer = parser.footerLength ? new Buffer(parser.footerLength) : null;
     this.recordstoread = ~~((this.filesize - this.headerLength() - this.footerLength()) / this.parser.recordDelimiter);
-    console.log(this.reader.name, 'recordstoread', this.recordstoread);
+    //console.log(this.reader.name, 'recordstoread', this.recordstoread);
   }
   lib.inherit(HRFReader, lib.AsyncJob);
   HRFReader.prototype.destroy = function () {
@@ -328,7 +328,7 @@ function createReaders(execlib,FileOperation,util) {
         this.reader.notify(rec);
       }
     } catch (e) {
-      console.log('ERROR in parsing record',record,':',e);
+      //console.log('ERROR in parsing record',record,':',e);
       this.reader.fail(e);
     }
   };
@@ -431,12 +431,12 @@ function createReaders(execlib,FileOperation,util) {
     };
   };
   DirReader.prototype.oneDone = function () {
-    console.log(this.name,'oneDone');
+    //console.log(this.name,'oneDone');
     this.result ++;
     this.checkDone();
   };
   DirReader.prototype.oneFailed = function () {
-    console.log(this.name,'oneFailed');
+    //console.log(this.name,'oneFailed');
     this.filecount --;
     this.checkDone();
   };
@@ -446,7 +446,7 @@ function createReaders(execlib,FileOperation,util) {
       d.resolve(false);
       return d.promise;
     }
-    console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options.filecontents);
+    //console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options.filecontents);
     if (this.parserInfo.needed && this.options.filecontents.modulename === '*') {
       rd = q.defer();
       metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
@@ -461,7 +461,7 @@ function createReaders(execlib,FileOperation,util) {
     return d.promise;
   };
   DirReader.prototype.onMeta = function (defer, filename, meta) {
-    console.log(this.name, 'onMeta', filename, meta);
+    //console.log(this.name, 'onMeta', filename, meta);
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
