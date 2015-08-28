@@ -275,7 +275,7 @@ function createFileOperation(execlib, util) {
       if(this.error){
         this.defer.reject(this.error);
       }else{
-        console.log(this.name,'resolving its defer with',this.result);
+        //console.log(this.name,'resolving its defer with',this.result);
         this.defer.resolve(this.result);
       }
     }
@@ -541,7 +541,12 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onSizeForParser = function (parser, size) {
-    (new HRFReader(this, size, parser)).go();
+    var hrfr = new HRFReader(this, size, parser);
+    hrfr.defer.promise.done(
+      this.destroy.bind(this),
+      this.fail.bind(this)
+    );
+    (hrfr).go();
   };
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
     var rec;
@@ -565,7 +570,7 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
-    //console.log('onOpenForRawRead');
+    //console.log(this.name, 'onOpenForRawRead', start, quantity);
     this.read(start, quantity).done(
       this.onRawReadDone.bind(this),
       this.fail.bind(this),
@@ -595,7 +600,7 @@ function createReaders(execlib,FileOperation,util) {
      );
   };
   ParsedFileReader.prototype.onBufferReadForVariableLengthRecord = function (parser, buff, offsetobj, bytesread) {
-    //console.log('bytes read', bytesread);
+    //console.log('csv bytes read', bytesread);
     if (!bytesread) {
       parser.destroy();
       this.result = offsetobj.offset;
@@ -624,7 +629,7 @@ function createReaders(execlib,FileOperation,util) {
     this.record = parser.recordDelimiter ? new Buffer(parser.recordDelimiter) : null;
     this.footer = parser.footerLength ? new Buffer(parser.footerLength) : null;
     this.recordstoread = ~~((this.filesize - this.headerLength() - this.footerLength()) / this.parser.recordDelimiter);
-    console.log(this.reader.name, 'recordstoread', this.recordstoread);
+    //console.log(this.reader.name, 'recordstoread', this.recordstoread);
   }
   lib.inherit(HRFReader, lib.AsyncJob);
   HRFReader.prototype.destroy = function () {
@@ -710,7 +715,7 @@ function createReaders(execlib,FileOperation,util) {
         this.reader.notify(rec);
       }
     } catch (e) {
-      console.log('ERROR in parsing record',record,':',e);
+      //console.log('ERROR in parsing record',record,':',e);
       this.reader.fail(e);
     }
   };
@@ -813,10 +818,12 @@ function createReaders(execlib,FileOperation,util) {
     };
   };
   DirReader.prototype.oneDone = function () {
+    //console.log(this.name,'oneDone');
     this.result ++;
     this.checkDone();
   };
   DirReader.prototype.oneFailed = function () {
+    //console.log(this.name,'oneFailed');
     this.filecount --;
     this.checkDone();
   };
@@ -826,7 +833,8 @@ function createReaders(execlib,FileOperation,util) {
       d.resolve(false);
       return d.promise;
     }
-    if (this.parserInfo.needed && this.options.filecontents.modulename === '*') {
+    //console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options.filecontents);
+    if (this.needMeta()) {
       rd = q.defer();
       metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
       rd.promise.done(
@@ -839,7 +847,18 @@ function createReaders(execlib,FileOperation,util) {
     }
     return d.promise;
   };
+  DirReader.prototype.needMeta = function () {
+    return this.parserInfo.needed && 
+      (
+        this.options.filecontents.modulename === '*' ||
+        (
+          this.options.filecontents.modulenames &&
+          this.options.filecontents.modulenames.length
+        )
+      );
+  };
   DirReader.prototype.onMeta = function (defer, filename, meta) {
+    //console.log(this.name, 'onMeta', filename, meta);
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
@@ -870,7 +889,8 @@ function createReaders(execlib,FileOperation,util) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
       d.promise.done(
-        reportobj.defer.resolve.bind(reportobj.defer,true),
+        //reportobj.defer.resolve.bind(reportobj.defer,true),
+        this.onParsedFile.bind(this, reportobj),
         this.fail.bind(this),
         this.onParsedRecord.bind(this, reportobj.data || {})
       );
@@ -879,6 +899,11 @@ function createReaders(execlib,FileOperation,util) {
       this.notify(reportobj.data || filename);
       reportobj.defer.resolve(true);
     }
+  };
+  DirReader.prototype.onParsedFile = function (reportobj) {
+    this.parserInfo.instance.destroy();
+    this.parserInfo.instance = null;
+    reportobj.defer.resolve(true);
   };
   DirReader.prototype.onParsedRecord = function (statsobj, parsedrecord) {
     //console.log('notifying', parsedrecord);
@@ -1096,7 +1121,7 @@ function createWriters(execlib,FileOperation) {
     );
   };
   FileWriter.prototype.readyToOpen = function () {
-    console.log(this.name, 'readyToOpen', arguments);
+    //console.log(this.name, 'readyToOpen', arguments);
     if(!this.active){
       this.active = true;
       this.open();
@@ -1121,7 +1146,7 @@ function createWriters(execlib,FileOperation) {
     return defer.promise;
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
-    console.log(this.name, 'writing', chunk.length);
+    //console.log(this.name, 'writing', chunk.length);
     if(chunk instanceof Buffer){
       fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
@@ -1233,12 +1258,12 @@ function createWriters(execlib,FileOperation) {
   }
   lib.inherit(PerFileParsedFileWriter, ParsedFileWriter);
   PerFileParsedFileWriter.prototype.go = function () {
-    console.log('should write .parserinfo');
+    //console.log('should write .parserinfo');
     ParsedFileWriter.prototype.go.call(this);
   };
 
   function TxnCommiter(txndirname, name, path, defer) {
-    console.log('new TxnCommiter', txndirname, name, path);
+    //console.log('new TxnCommiter', txndirname, name, path);
     FileOperation.call(this, name, path, defer);
     this.txndirname = txndirname;
     this.affectedfilepaths = null;
@@ -1273,25 +1298,25 @@ function createWriters(execlib,FileOperation) {
     var r = child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
   };
   TxnCommiter.prototype.onRmRf = function () {
-    console.log('onRmRf');
+    //console.log('onRmRf');
     this.destroy();
   };
 
   function writerFactory(name, path, options, defer) {
     if (options.txndirname) {
-      console.log('for',name,'returning new TxnCommiter');
+      //console.log('for',name,'returning new TxnCommiter');
       return new TxnCommiter(options.txndirname, name, path, defer);
     }
     if (options.modulename){
       if (options.typed) {
-        console.log('for',name,'returning new ParsedFileWriter');
+        //console.log('for',name,'returning new ParsedFileWriter');
         return new ParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       } else {
-        console.log('for',name,'returning new PerFileParsedFileWriter');
+        //console.log('for',name,'returning new PerFileParsedFileWriter');
         return new PerFileParsedFileWriter(name, path, options.modulename, options.propertyhash, defer);
       }
     }
-    console.log('for',name,'returning new RawFileWriter');
+    //console.log('for',name,'returning new RawFileWriter');
     return new RawFileWriter(name, path, defer);
   }
   return writerFactory;
@@ -1919,28 +1944,35 @@ var rootParent = {}
  * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
  * Opera 11.6+, iOS 4.2+.
  *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
  * Note:
  *
- * - Implementation must support adding new properties to `Uint8Array` instances.
- *   Firefox 4-29 lacked support, fixed in Firefox 30+.
- *   See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
  *
- *  - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *   - Safari 5-7 lacks support for changing the `Object.prototype.constructor` property
+ *     on objects.
  *
- *  - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *    incorrect length in some situations.
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
  *
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they will
- * get the Object implementation, which is slower but will work correctly.
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
  */
 Buffer.TYPED_ARRAY_SUPPORT = (function () {
+  function Bar () {}
   try {
-    var buf = new ArrayBuffer(0)
-    var arr = new Uint8Array(buf)
+    var arr = new Uint8Array(1)
     arr.foo = function () { return 42 }
+    arr.constructor = Bar
     return arr.foo() === 42 && // typed array instances can be augmented
+        arr.constructor === Bar && // constructor can be set
         typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        new Uint8Array(1).subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
   } catch (e) {
     return false
   }
@@ -2018,8 +2050,13 @@ function fromObject (that, object) {
     throw new TypeError('must start with number, buffer, array or string')
   }
 
-  if (typeof ArrayBuffer !== 'undefined' && object.buffer instanceof ArrayBuffer) {
-    return fromTypedArray(that, object)
+  if (typeof ArrayBuffer !== 'undefined') {
+    if (object.buffer instanceof ArrayBuffer) {
+      return fromTypedArray(that, object)
+    }
+    if (object instanceof ArrayBuffer) {
+      return fromArrayBuffer(that, object)
+    }
   }
 
   if (object.length) return fromArrayLike(that, object)
@@ -2052,6 +2089,18 @@ function fromTypedArray (that, array) {
   // of the old Buffer constructor.
   for (var i = 0; i < length; i += 1) {
     that[i] = array[i] & 255
+  }
+  return that
+}
+
+function fromArrayBuffer (that, array) {
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    array.byteLength
+    that = Buffer._augment(new Uint8Array(array))
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    that = fromTypedArray(that, new Uint8Array(array))
   }
   return that
 }
@@ -2173,8 +2222,6 @@ Buffer.concat = function concat (list, length) {
 
   if (list.length === 0) {
     return new Buffer(0)
-  } else if (list.length === 1) {
-    return list[0]
   }
 
   var i
@@ -2349,13 +2396,13 @@ Buffer.prototype.indexOf = function indexOf (val, byteOffset) {
   throw new TypeError('val must be string, number or Buffer')
 }
 
-// `get` will be removed in Node 0.13+
+// `get` is deprecated
 Buffer.prototype.get = function get (offset) {
   console.log('.get() is deprecated. Access using array indexes instead.')
   return this.readUInt8(offset)
 }
 
-// `set` will be removed in Node 0.13+
+// `set` is deprecated
 Buffer.prototype.set = function set (v, offset) {
   console.log('.set() is deprecated. Access using array indexes instead.')
   return this.writeUInt8(v, offset)
@@ -2496,20 +2543,84 @@ function base64Slice (buf, start, end) {
 }
 
 function utf8Slice (buf, start, end) {
-  var res = ''
-  var tmp = ''
   end = Math.min(buf.length, end)
+  var firstByte
+  var secondByte
+  var thirdByte
+  var fourthByte
+  var bytesPerSequence
+  var tempCodePoint
+  var codePoint
+  var res = []
+  var i = start
 
-  for (var i = start; i < end; i++) {
-    if (buf[i] <= 0x7F) {
-      res += decodeUtf8Char(tmp) + String.fromCharCode(buf[i])
-      tmp = ''
+  for (; i < end; i += bytesPerSequence) {
+    firstByte = buf[i]
+    codePoint = 0xFFFD
+
+    if (firstByte > 0xEF) {
+      bytesPerSequence = 4
+    } else if (firstByte > 0xDF) {
+      bytesPerSequence = 3
+    } else if (firstByte > 0xBF) {
+      bytesPerSequence = 2
     } else {
-      tmp += '%' + buf[i].toString(16)
+      bytesPerSequence = 1
     }
+
+    if (i + bytesPerSequence <= end) {
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
+    }
+
+    if (codePoint === 0xFFFD) {
+      // we generated an invalid codePoint so make sure to only advance by 1 byte
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
   }
 
-  return res + decodeUtf8Char(tmp)
+  return String.fromCharCode.apply(String, res)
 }
 
 function asciiSlice (buf, start, end) {
@@ -3044,9 +3155,16 @@ Buffer.prototype.copy = function copy (target, targetStart, start, end) {
   }
 
   var len = end - start
+  var i
 
-  if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < len; i++) {
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; i--) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; i++) {
       target[i + targetStart] = this[i + start]
     }
   } else {
@@ -3122,7 +3240,7 @@ Buffer._augment = function _augment (arr) {
   // save reference to original Uint8Array set method before overwriting
   arr._set = arr.set
 
-  // deprecated, will be removed in node 0.13+
+  // deprecated
   arr.get = BP.get
   arr.set = BP.set
 
@@ -3178,7 +3296,7 @@ Buffer._augment = function _augment (arr) {
   return arr
 }
 
-var INVALID_BASE64_RE = /[^+\/0-9A-z\-]/g
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
 
 function base64clean (str) {
   // Node strips out invalid characters like \n and \t from the string, base64-js does not
@@ -3208,47 +3326,48 @@ function utf8ToBytes (string, units) {
   var length = string.length
   var leadSurrogate = null
   var bytes = []
-  var i = 0
 
-  for (; i < length; i++) {
+  for (var i = 0; i < length; i++) {
     codePoint = string.charCodeAt(i)
 
     // is surrogate component
     if (codePoint > 0xD7FF && codePoint < 0xE000) {
       // last char was a lead
-      if (leadSurrogate) {
-        // 2 leads in a row
-        if (codePoint < 0xDC00) {
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          leadSurrogate = codePoint
-          continue
-        } else {
-          // valid surrogate pair
-          codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-          leadSurrogate = null
-        }
-      } else {
+      if (!leadSurrogate) {
         // no lead yet
-
         if (codePoint > 0xDBFF) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
+
         } else if (i + 1 === length) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-        } else {
-          // valid lead
-          leadSurrogate = codePoint
-          continue
         }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
       }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
+
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-      leadSurrogate = null
     }
+
+    leadSurrogate = null
 
     // encode utf8
     if (codePoint < 0x80) {
@@ -3267,7 +3386,7 @@ function utf8ToBytes (string, units) {
         codePoint >> 0x6 & 0x3F | 0x80,
         codePoint & 0x3F | 0x80
       )
-    } else if (codePoint < 0x200000) {
+    } else if (codePoint < 0x110000) {
       if ((units -= 4) < 0) break
       bytes.push(
         codePoint >> 0x12 | 0xF0,
@@ -3318,14 +3437,6 @@ function blitBuffer (src, dst, offset, length) {
     dst[i + offset] = src[i]
   }
   return i
-}
-
-function decodeUtf8Char (str) {
-  try {
-    return decodeURIComponent(str)
-  } catch (err) {
-    return String.fromCharCode(0xFFFD) // UTF 8 invalid char
-  }
 }
 
 },{"base64-js":22,"ieee754":23,"is-array":24}],22:[function(require,module,exports){

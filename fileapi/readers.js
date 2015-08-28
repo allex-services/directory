@@ -118,7 +118,7 @@ function createReaders(execlib,FileOperation,util) {
     } else {
       if(this.options.modulename === '*'){
       }else{
-        execlib.execSuite.parserRegistry.spawn(this.options.modulename, this.options.prophash).done(
+        execlib.execSuite.parserRegistry.spawn(this.options.modulename, this.options.propertyhash).done(
           this.onParser.bind(this),
           this.fail.bind(this)
         );
@@ -446,8 +446,8 @@ function createReaders(execlib,FileOperation,util) {
       d.resolve(false);
       return d.promise;
     }
-    //console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options.filecontents);
-    if (this.parserInfo.needed && this.options.filecontents.modulename === '*') {
+    //console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options);
+    if (this.needMeta()) {
       rd = q.defer();
       metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
       rd.promise.done(
@@ -460,14 +460,44 @@ function createReaders(execlib,FileOperation,util) {
     }
     return d.promise;
   };
+  DirReader.prototype.needMeta = function () {
+    return this.parserInfo.needed && 
+      (
+        this.options.filecontents.modulename === '*' ||
+        this.options.filecontents.parsers
+      );
+  };
+  function modulefinder(findobj, moduleitem) {
+    if(findobj.modulename === moduleitem.modulename){
+      findobj.found = moduleitem;
+      return true;
+    }
+  }
   DirReader.prototype.onMeta = function (defer, filename, meta) {
     //console.log(this.name, 'onMeta', filename, meta);
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
     }
-    //console.log(filename, 'meta.parserinfo', meta.parserinfo);
-    execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.prophash).done(
+    if (this.options.filecontents.parsers) {
+      /*
+      var findobj = {modulename: meta.parserinfo.modulename, found: null};
+      if (!this.options.filecontents.parsers.some(modulefinder.bind(null, findobj))) {
+        defer.resolve(false);
+        return;
+      }
+      meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, findobj.found.propertyhash);
+      */
+      var parserfound = this.options.filecontents.parsers[meta.parserinfo.modulename];
+      if (!parserfound) {
+        defer.resolve(false);
+        return;
+      }
+      console.log('found', parserfound);
+      meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, parserfound.propertyhash);
+    }
+    console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
+    execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.propertyhash).done(
       this.onMetaParser.bind(this, defer, filename),
       defer.resolve.bind(defer,false)
     );
