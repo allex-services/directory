@@ -164,6 +164,7 @@ function createUser(execlib,ParentUser){
 
 
   function User(prophash){
+    console.log('Directory User', prophash);
     ParentUser.call(this,prophash);
     this.path = prophash.path;
     this.traversaloptions = prophash.traversal;

@@ -505,7 +505,7 @@ function createReaders(execlib,FileOperation,util) {
     } else {
       if(this.options.modulename === '*'){
       }else{
-        execlib.execSuite.parserRegistry.spawn(this.options.modulename, this.options.prophash).done(
+        execlib.execSuite.parserRegistry.spawn(this.options.modulename, this.options.propertyhash).done(
           this.onParser.bind(this),
           this.fail.bind(this)
         );
@@ -833,7 +833,7 @@ function createReaders(execlib,FileOperation,util) {
       d.resolve(false);
       return d.promise;
     }
-    //console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options.filecontents);
+    //console.log(this.name, 'deciding wether to read .meta, this.parserInfo', this.parserInfo, 'this.options', this.options);
     if (this.needMeta()) {
       rd = q.defer();
       metareader = readerFactory(Path.join('.meta', filename), Path.join(this.path, '.meta', filename), {modulename: 'allex_jsonparser'}, rd);
@@ -847,27 +847,57 @@ function createReaders(execlib,FileOperation,util) {
     }
     return d.promise;
   };
-  DirReader.prototype.needMeta = function () {
+  DirReader.prototype.needParsing = function () {
     return this.parserInfo.needed && 
       (
         this.options.filecontents.modulename === '*' ||
-        (
-          this.options.filecontents.modulenames &&
-          this.options.filecontents.modulenames.length
-        )
+        this.options.filecontents.parsers
       );
   };
+  DirReader.prototype.needMeta = function () {
+    //console.log('needMeta?', this.options);
+    return this.options.metastats || this.needParsing();
+  };
+  function modulefinder(findobj, moduleitem) {
+    if(findobj.modulename === moduleitem.modulename){
+      findobj.found = moduleitem;
+      return true;
+    }
+  }
+  function fillMetaInfo(metainfo, metaresult, metaname){
+    if (lib.isString(metaname)) {
+      metaresult[metaname] = metainfo[metaname];
+    } else {
+      metaresult[metaname.dest] = lib.readPropertyFromDotDelimitedString(metainfo, metaname.src);
+    }
+  }
   DirReader.prototype.onMeta = function (defer, filename, meta) {
-    //console.log(this.name, 'onMeta', filename, meta);
+    console.log(this.name, 'onMeta', filename, meta);
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
     }
-    //console.log(filename, 'meta.parserinfo', meta.parserinfo);
-    execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.prophash).done(
-      this.onMetaParser.bind(this, defer, filename),
-      defer.resolve.bind(defer,false)
-    );
+    if (this.options.filecontents && this.options.filecontents.parsers) {
+      var parserfound = this.options.filecontents.parsers[meta.parserinfo.modulename];
+      if (!parserfound) {
+        defer.resolve(false);
+        return;
+      }
+      console.log('found', parserfound);
+      meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, parserfound.propertyhash);
+    }
+    if (this.needParsing()) {
+      console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
+      execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.propertyhash).done(
+        this.onMetaParser.bind(this, defer, filename),
+        defer.resolve.bind(defer,false)
+      );
+    } else {
+      var metainfo = {};
+      this.options.metastats.forEach(fillMetaInfo.bind(null, meta, metainfo));
+      this.options.metainfo = metainfo;
+      this.checkFStats(defer, filename);
+    }
   };
   DirReader.prototype.onMetaParser = function (defer, filename, parser) {
     this.parserInfo.instance = parser;
@@ -896,7 +926,9 @@ function createReaders(execlib,FileOperation,util) {
       );
       parser.go();
     } else {
-      this.notify(reportobj.data || filename);
+      var data = lib.extend(reportobj.data, this.options.metainfo);
+      console.log(filename, '=>', data);
+      this.notify(data || filename);
       reportobj.defer.resolve(true);
     }
   };

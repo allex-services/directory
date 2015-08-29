@@ -460,17 +460,28 @@ function createReaders(execlib,FileOperation,util) {
     }
     return d.promise;
   };
-  DirReader.prototype.needMeta = function () {
+  DirReader.prototype.needParsing = function () {
     return this.parserInfo.needed && 
       (
         this.options.filecontents.modulename === '*' ||
         this.options.filecontents.parsers
       );
   };
+  DirReader.prototype.needMeta = function () {
+    //console.log('needMeta?', this.options);
+    return this.options.metastats || this.needParsing();
+  };
   function modulefinder(findobj, moduleitem) {
     if(findobj.modulename === moduleitem.modulename){
       findobj.found = moduleitem;
       return true;
+    }
+  }
+  function fillMetaInfo(metainfo, metaresult, metaname){
+    if (lib.isString(metaname)) {
+      metaresult[metaname] = metainfo[metaname];
+    } else {
+      metaresult[metaname.dest] = lib.readPropertyFromDotDelimitedString(metainfo, metaname.src);
     }
   }
   DirReader.prototype.onMeta = function (defer, filename, meta) {
@@ -479,28 +490,27 @@ function createReaders(execlib,FileOperation,util) {
       defer.resolve(false);
       return;
     }
-    if (this.options.filecontents.parsers) {
-      /*
-      var findobj = {modulename: meta.parserinfo.modulename, found: null};
-      if (!this.options.filecontents.parsers.some(modulefinder.bind(null, findobj))) {
-        defer.resolve(false);
-        return;
-      }
-      meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, findobj.found.propertyhash);
-      */
+    if (this.options.filecontents && this.options.filecontents.parsers) {
       var parserfound = this.options.filecontents.parsers[meta.parserinfo.modulename];
       if (!parserfound) {
         defer.resolve(false);
         return;
       }
-      console.log('found', parserfound);
+      //console.log('found', parserfound);
       meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, parserfound.propertyhash);
     }
-    console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
-    execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.propertyhash).done(
-      this.onMetaParser.bind(this, defer, filename),
-      defer.resolve.bind(defer,false)
-    );
+    if (this.needParsing()) {
+      //console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
+      execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.propertyhash).done(
+        this.onMetaParser.bind(this, defer, filename),
+        defer.resolve.bind(defer,false)
+      );
+    } else {
+      var metainfo = {};
+      this.options.metastats.forEach(fillMetaInfo.bind(null, meta, metainfo));
+      this.options.metainfo = metainfo;
+      this.checkFStats(defer, filename);
+    }
   };
   DirReader.prototype.onMetaParser = function (defer, filename, parser) {
     this.parserInfo.instance = parser;
@@ -529,7 +539,9 @@ function createReaders(execlib,FileOperation,util) {
       );
       parser.go();
     } else {
-      this.notify(reportobj.data || filename);
+      var data = lib.extend(reportobj.data, this.options.metainfo);
+      //console.log(filename, '=>', data);
+      this.notify(data || filename);
       reportobj.defer.resolve(true);
     }
   };
