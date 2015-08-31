@@ -249,7 +249,7 @@ function createFileOperation(execlib, util) {
     if (!defer.promise) {
       console.trace();
       console.log(defer);
-      throw "KOJ TI MOJ DA MI SALJES OVO ZA DEFER?@!";
+      throw "YOU THINK THIS IS A DEFER?@!";
     }
     this.originalFS = null;
     this.name = name;
@@ -275,7 +275,6 @@ function createFileOperation(execlib, util) {
       if(this.error){
         this.defer.reject(this.error);
       }else{
-        //console.log(this.name,'resolving its defer with',this.result);
         this.defer.resolve(this.result);
       }
     }
@@ -737,12 +736,14 @@ function createReaders(execlib,FileOperation,util) {
       instance: null
     };
     if (this.options.filecontents) {
-      this.parserInfo.needed = true;
-      if (this.options.filecontents.modulename !== '*') {
-        execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
-          this.onParserInstantiated.bind(this),
-          this.fail.bind(this)
-        );
+      if (this.options.filecontents.modulename) {
+        this.parserInfo.needed = true;
+        if (this.options.filecontents.modulename !== '*') {
+          execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
+            this.onParserInstantiated.bind(this),
+            this.fail.bind(this)
+          );
+        }
       }
     }
   }
@@ -804,7 +805,6 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   DirReader.prototype.processSuccess = function (filelist, filename, result) {
-    //console.log('processSuccess', filename, result);
     if (result) {
       this.oneDone();
     } else {
@@ -872,22 +872,24 @@ function createReaders(execlib,FileOperation,util) {
     }
   }
   DirReader.prototype.onMeta = function (defer, filename, meta) {
-    console.log(this.name, 'onMeta', filename, meta);
+    //console.log(this.name, 'onMeta', filename, meta, require('util').inspect(this.options, {depth:null}));
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
     }
     if (this.options.filecontents && this.options.filecontents.parsers) {
+      //console.log('looking for', meta.parserinfo.modulename, 'in', this.options.filecontents.parsers);
       var parserfound = this.options.filecontents.parsers[meta.parserinfo.modulename];
+      //console.log('found', parserfound);
       if (!parserfound) {
         defer.resolve(false);
         return;
       }
-      console.log('found', parserfound);
+      //console.log('found', parserfound);
       meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, parserfound.propertyhash);
     }
     if (this.needParsing()) {
-      console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
+      //console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
       execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.propertyhash).done(
         this.onMetaParser.bind(this, defer, filename),
         defer.resolve.bind(defer,false)
@@ -927,7 +929,7 @@ function createReaders(execlib,FileOperation,util) {
       parser.go();
     } else {
       var data = lib.extend(reportobj.data, this.options.metainfo);
-      console.log(filename, '=>', data);
+      //console.log(filename, '=>', data);
       this.notify(data || filename);
       reportobj.defer.resolve(true);
     }
@@ -1153,7 +1155,6 @@ function createWriters(execlib,FileOperation) {
     );
   };
   FileWriter.prototype.readyToOpen = function () {
-    //console.log(this.name, 'readyToOpen', arguments);
     if(!this.active){
       this.active = true;
       this.open();
@@ -1179,6 +1180,11 @@ function createWriters(execlib,FileOperation) {
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
     //console.log(this.name, 'writing', chunk.length);
+    if (!this.fh) {
+      console.trace();
+      console.log('cannot write without my filehandle');
+      return;
+    }
     if(chunk instanceof Buffer){
       fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
@@ -1187,6 +1193,7 @@ function createWriters(execlib,FileOperation) {
   };
   FileWriter.prototype.onBufferWritten = function (defer, writtenobj, err, written, buffer) {
     if (err) {
+      console.error(err, 'when writing', writtenobj, 'on', this);
       defer.reject(err);
       this.fail(err);
     } else {
@@ -1912,6 +1919,7 @@ function createTransmitFileTask(execlib){
   };
   TransmitFileTask.prototype.readChunk = function(){
     if(!this.file){
+      console.log(this.filename,'has no filehandle, reporting null which will close the socket');
       return null;
     }
     var read = fs.readSync(this.file,this.buffer,0,this.buffer.length,null), buff;
