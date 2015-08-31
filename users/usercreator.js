@@ -89,7 +89,7 @@ function createUser(execlib,ParentUser){
     }
   };
   FileUploadServer.prototype.onPacketWritten = function (bytes) {
-    console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
+    //console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
     this.written += bytes;
     this.user.set(this.uploadpath, this.written);
     if (this.written === this.options.filesize) {
@@ -321,6 +321,7 @@ function createUser(execlib,ParentUser){
   };
   User.prototype.traverse = function (dirname, options, defer) {
     var opts = lib.extend({}, this.traversaloptions);
+    //console.log('my opts', this.traversaloptions, '+ particular opts', options, '=>', opts);
     lib.extend (opts, options);
     opts.traverse = true;
     //console.log('my opts', this.traversaloptions, '+ particular opts', options, '=>', opts);

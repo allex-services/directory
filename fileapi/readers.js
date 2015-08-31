@@ -350,12 +350,14 @@ function createReaders(execlib,FileOperation,util) {
       instance: null
     };
     if (this.options.filecontents) {
-      this.parserInfo.needed = true;
-      if (this.options.filecontents.modulename !== '*') {
-        execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
-          this.onParserInstantiated.bind(this),
-          this.fail.bind(this)
-        );
+      if (this.options.filecontents.modulename) {
+        this.parserInfo.needed = true;
+        if (this.options.filecontents.modulename !== '*') {
+          execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
+            this.onParserInstantiated.bind(this),
+            this.fail.bind(this)
+          );
+        }
       }
     }
   }
@@ -417,7 +419,6 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
   DirReader.prototype.processSuccess = function (filelist, filename, result) {
-    //console.log('processSuccess', filename, result);
     if (result) {
       this.oneDone();
     } else {
@@ -485,13 +486,15 @@ function createReaders(execlib,FileOperation,util) {
     }
   }
   DirReader.prototype.onMeta = function (defer, filename, meta) {
-    //console.log(this.name, 'onMeta', filename, meta);
+    //console.log(this.name, 'onMeta', filename, meta, require('util').inspect(this.options, {depth:null}));
     if (!(meta && meta.parserinfo)) {
       defer.resolve(false);
       return;
     }
     if (this.options.filecontents && this.options.filecontents.parsers) {
+      //console.log('looking for', meta.parserinfo.modulename, 'in', this.options.filecontents.parsers);
       var parserfound = this.options.filecontents.parsers[meta.parserinfo.modulename];
+      //console.log('found', parserfound);
       if (!parserfound) {
         defer.resolve(false);
         return;
