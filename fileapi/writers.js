@@ -37,7 +37,6 @@ function createWriters(execlib,FileOperation) {
     );
   };
   FileWriter.prototype.readyToOpen = function () {
-    //console.log(this.name, 'readyToOpen', arguments);
     if(!this.active){
       this.active = true;
       this.open();
@@ -63,6 +62,11 @@ function createWriters(execlib,FileOperation) {
   };
   FileWriter.prototype._performWriting = function (chunk, defer, writtenobj) {
     //console.log(this.name, 'writing', chunk.length);
+    if (!this.fh) {
+      console.trace();
+      console.log('cannot write without my filehandle');
+      return;
+    }
     if(chunk instanceof Buffer){
       fs.write(this.fh, chunk, 0, chunk.length, null, this.onBufferWritten.bind(this, defer, writtenobj));
     }else{
@@ -71,6 +75,7 @@ function createWriters(execlib,FileOperation) {
   };
   FileWriter.prototype.onBufferWritten = function (defer, writtenobj, err, written, buffer) {
     if (err) {
+      console.error(err, 'when writing', writtenobj, 'on', this);
       defer.reject(err);
       this.fail(err);
     } else {

@@ -12,7 +12,7 @@ function createFileOperation(execlib, util) {
     if (!defer.promise) {
       console.trace();
       console.log(defer);
-      throw "KOJ TI MOJ DA MI SALJES OVO ZA DEFER?@!";
+      throw "YOU THINK THIS IS A DEFER?@!";
     }
     this.originalFS = null;
     this.name = name;
@@ -38,7 +38,6 @@ function createFileOperation(execlib, util) {
       if(this.error){
         this.defer.reject(this.error);
       }else{
-        //console.log(this.name,'resolving its defer with',this.result);
         this.defer.resolve(this.result);
       }
     }

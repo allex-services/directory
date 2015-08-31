@@ -49,18 +49,17 @@ function createUser(execlib,ParentUser){
   }
   lib.inherit(FileUploadServer,ParentUser.prototype.TcpTransmissionServer);
   FileUploadServer.prototype.destroy = function(){
+    if (this.options && this.written !== this.options.filesize) {
+      return;
+    }
     if(this.uploadpath && this.user && this.user.__service){
       this.user.__service.state.remove(this.uploadpath);
     }
-    this.written = null;
-    if(this.options){
-      this.onTransmissionDone();
-      return;
-    }
     this.uploadpath = null;
+    this.written = null;
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
-  FileUploadServer.prototype.onSuccess = function (txn) {
+  FileUploadServer.prototype.onSuccess = function (txn, result) {
     var d = q.defer();
     txn.commit(d);
     d.promise.done(this.onSuccessDone.bind(this));
@@ -71,6 +70,10 @@ function createUser(execlib,ParentUser){
     d.promise.done(this.onFailureDone.bind(this));
   };
   FileUploadServer.prototype.onSuccessDone = function () {
+    if (!this.user) {
+      console.error('How come FileUploadServer has no user?', this);
+      return;
+    }
     this.user.set(this.uploadpath, '*');
     this.destroy();
   };
@@ -79,19 +82,19 @@ function createUser(execlib,ParentUser){
     this.destroy();
   };
   FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
-    //console.log('processTransmissionPacket',buffer);
     if(!this.options){
       this.closeAllAndDie(server,connection);
     }else{
       this.options.writer.write(buffer).done(this.onPacketWritten.bind(this));
     }
   };
-  FileUploadServer.prototype.onPacketWritten = function () {
-    //console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
-    this.user.set(this.uploadpath, this.options.writer.result);
-  };
-  FileUploadServer.prototype.onTransmissionDone = function(){
-    this.options.writer.close();
+  FileUploadServer.prototype.onPacketWritten = function (bytes) {
+    console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
+    this.written += bytes;
+    this.user.set(this.uploadpath, this.written);
+    if (this.written === this.options.filesize) {
+      this.options.writer.close();
+    }
   };
 
   function FileDownloadServer(user, options){
@@ -164,7 +167,6 @@ function createUser(execlib,ParentUser){
 
 
   function User(prophash){
-    console.log('Directory User', prophash);
     ParentUser.call(this,prophash);
     this.path = prophash.path;
     this.traversaloptions = prophash.traversal;
@@ -251,7 +253,6 @@ function createUser(execlib,ParentUser){
       txn = this.__service.db.begin(Path.dirname(options.filename));
       metauploadpath = this.metaPath(options.filename);
       writemetadatadefer = q.defer();
-      //console.log('metauploadpath', metauploadpath);
       this.writeOnDB(txn, metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
       writemetadatadefer.promise.done(
         this.realizeUploadRequest.bind(this, txn, options, defer),

@@ -97,6 +97,7 @@ function createTransmitFileTask(execlib){
   };
   TransmitFileTask.prototype.readChunk = function(){
     if(!this.file){
+      console.log(this.filename,'has no filehandle, reporting null which will close the socket');
       return null;
     }
     var read = fs.readSync(this.file,this.buffer,0,this.buffer.length,null), buff;
