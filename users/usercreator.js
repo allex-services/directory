@@ -319,12 +319,18 @@ function createUser(execlib,ParentUser){
       defer.reject(e);
     }
   };
+  /*
+  var util = require('util');
+  function expose(obj){
+    return util.inspect(obj, {depth:null});
+  }
+  */
   User.prototype.traverse = function (dirname, options, defer) {
     var opts = lib.extend({}, this.traversaloptions);
-    //console.log('my opts', this.traversaloptions, '+ particular opts', options, '=>', opts);
+    //console.log(this.path, 'my opts', expose(this.traversaloptions), '+ particular opts', expose(options), '=>', expose(opts));
     lib.extend (opts, options);
     opts.traverse = true;
-    //console.log('my opts', this.traversaloptions, '+ particular opts', options, '=>', opts);
+    //console.log(this.path, 'my opts', expose(this.traversaloptions), '+ particular opts', expose(options), '=>', expose(opts));
     this.__service.db.read(this.path ? Path.join(this.path, dirname) : dirname, opts, defer);
   };
   User.prototype.notifyFSEvent = function (originalfs, newfs, path) {

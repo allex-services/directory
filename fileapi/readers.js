@@ -340,6 +340,20 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
 
+  /*
+   * options: {
+   *   filecontents: { //options
+   *     modulename: '*' or a real parser modulename,
+   *     parsers: {
+   *       modulename: modulepropertyhash for spawning
+   *     }
+   *   },
+   *   filestats: ['filebasename', 'filename', 'fileext', 'filetype', 'created', 'lastmodified'],
+   *   metastats: [stringorfetcher],
+   *   files: ['filename1', ..., 'filenameN'], //whitelist
+   *   filetypes: ['f', 'd'], //whitelist
+   * }
+   */
   function DirReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
     this.filecount = 0;
