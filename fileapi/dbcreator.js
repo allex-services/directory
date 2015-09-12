@@ -174,6 +174,7 @@ function createHandler(execlib, util) {
   lib.inherit(FileDataBaseTxn, FileDataBase);
   FileDataBaseTxn.prototype.commit = FileDataBase.prototype.close; //just terminology
   FileDataBaseTxn.prototype.destroy = function () {
+    //console.log('FileDataBaseTxn destroying', this);
     FileDataBase.prototype.destroy.call(this);
     if (this.rootpath === null) {
       this.postMortem();

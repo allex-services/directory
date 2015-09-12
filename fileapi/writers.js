@@ -184,8 +184,8 @@ function createWriters(execlib,FileOperation) {
   };
 
   function TxnCommiter(txndirname, name, path, defer) {
-    //console.log('new TxnCommiter', txndirname, name, path);
     FileOperation.call(this, name, path, defer);
+    //console.log('new TxnCommiter', txndirname, name, path, '=>', this);
     this.txndirname = txndirname;
     this.affectedfilepaths = null;
   }
@@ -213,10 +213,14 @@ function createWriters(execlib,FileOperation) {
   };
   */
   TxnCommiter.prototype.onMkDir = function (err, stdio, stderr) {
-    child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+Path.dirname(this.path), this.onCpRp.bind(this));
+    if (this.name === '.') {
+      child_process.exec('cp -rp '+this.txndirname+'/* '+this.path, this.onCpRp.bind(this));
+    } else {
+      child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+Path.dirname(this.path), this.onCpRp.bind(this));
+    }
   };
   TxnCommiter.prototype.onCpRp = function () {
-    var r = child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
+    child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
   };
   TxnCommiter.prototype.onRmRf = function () {
     //console.log('onRmRf');
