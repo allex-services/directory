@@ -105,6 +105,7 @@ function createUser(execlib,ParentUser){
   }
   lib.inherit(FileDownloadServer, ParentUser.prototype.TcpTransmissionServer);
   FileDownloadServer.prototype.destroy = function () {
+    console.log('FileDownloadServer dying');
     if(this.readPromise){
       return;
     }
@@ -151,8 +152,13 @@ function createUser(execlib,ParentUser){
     this.readPromise = null;
     this.closeAllAndDie(server, connection);
   };
+  FileDownloadServer.prototype.closeAllAndDie = function (server, connection) {
+    server.close();
+    connection.end();
+  };
   FileDownloadServer.prototype.sendPacket = function (server, connection, packet) {
     //console.log('sendPacket',this,packet);
+    console.log('sending packet', packet.length);
     if(!this.q){
       console.error('Y ME DED?');
       return;

@@ -94,10 +94,44 @@ function createReaders(execlib,FileOperation,util) {
   };
   FileReader.prototype.openMode = 'r';
 
-  function FileTransmitter(name, path, defer) {
+  function FileTransmitter(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
+    this.options = options;
   }
   lib.inherit(FileTransmitter,FileReader);
+  FileTransmitter.prototype.go = function () {
+    this.result = 0;
+    this.size().then(
+      this.onSizeForTransmit.bind(this)
+    );
+  };
+  FileTransmitter.prototype.onSizeForTransmit = function (size) {
+    if (!this.openDefer) {
+      return;
+    }
+    this.openDefer.promise.then(
+      this.doTransmission.bind(this, size)
+    );
+    this.open();
+  }
+  FileTransmitter.prototype.doTransmission = function (size) {
+    console.log('reading', size, 'bytes from', this.name, this.path);
+    try {
+    this.read(0, size).then(
+      this.destroy.bind(this),
+      this.fail.bind(this),
+      this.onChunk.bind(this)
+    );
+    } catch (e) {
+      console.error(e.stack);
+      console.error(e);
+    }
+  };
+  FileTransmitter.prototype.onChunk = function (chunk) {
+    console.log('on chunk', chunk);
+    this.result += chunk.length;
+    this.notify(chunk);
+  };
 
   function ParsedFileReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
@@ -620,6 +654,7 @@ function createReaders(execlib,FileOperation,util) {
     if(options.traverse){
       return new DirReader(name, path, options, defer);
     }
+    return new FileTransmitter(name, path, options, defer);
   }
 
   return readerFactory;

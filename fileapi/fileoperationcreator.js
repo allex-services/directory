@@ -75,7 +75,7 @@ function createFileOperation(execlib, util) {
       );
     } else {
       //console.log('returning originalFS.size', this.originalFS.size);
-      return this.originalFS.size;
+      return q(this.originalFS.size);
     }
     return d.promise;
   };

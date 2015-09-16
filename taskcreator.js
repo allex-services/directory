@@ -9,6 +9,9 @@ function createTasks(execlib){
   },{
     name: 'downloadFile',
     klass: require('./tasks/downloadFile')(execlib)
+  },{
+    name: 'downstreamFile',
+    klass: require('./tasks/downstreamFile')(execlib)
   }];
 }
 
