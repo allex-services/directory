@@ -62,7 +62,6 @@ function createDownstreamFileTask(execlib){
       return;
     }
     this.going = true;
-    console.log('transmitting', this.filename);
     taskRegistry.run('transmitTcp', {
       sink: this.sink,
       ipaddress: this.ipaddress,
@@ -79,11 +78,9 @@ function createDownstreamFileTask(execlib){
     });
   };
   DownstreamFileTask.prototype.onIncomingPacket = function (packet) {
-    console.log('onIncomingPacket', packet);
     this.cb(packet);
   };
   DownstreamFileTask.prototype.onTransmitOver = function () {
-    console.log('onTransmitOver');
     this.cb(null);
   };
   DownstreamFileTask.prototype.onPayloadNeeded = function () {
