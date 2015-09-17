@@ -38,6 +38,14 @@ function createHandler(execlib, util) {
     this.handleReader(readerFactory(this.name, this.path, options, defer));
     return defer.promise;
   };
+  FileQ.prototype.stepread = function (options, defer) {
+    defer = defer || q.defer();
+    options = options || {};
+    options.stepping = true;
+    var reader = readerFactory(this.name, this.path, options, defer);
+    this.handleReader(reader);
+    return reader;
+  };
   FileQ.prototype.write = function (options, defer) {
     var writer = writerFactory(this.name, this.path, options, defer);
     this.handleWriter(writer);
@@ -144,6 +152,17 @@ function createHandler(execlib, util) {
       return;
     }
     return this.fileQ(name).read(options, defer);
+  };
+  FileDataBase.prototype.stepread = function (name, options, defer) {
+    if(this.closingDefer){
+      if(defer){
+        defer.resolve();
+      }
+      return;
+    }
+    options = options || {};
+    options.stepping = true;
+    return this.fileQ(name).stepread(options, defer);
   };
   FileDataBase.prototype.write = function (name, options, defer) {
     if(this.closingDefer){

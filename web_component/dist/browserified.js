@@ -71,6 +71,14 @@ function createHandler(execlib, util) {
     this.handleReader(readerFactory(this.name, this.path, options, defer));
     return defer.promise;
   };
+  FileQ.prototype.stepread = function (options, defer) {
+    defer = defer || q.defer();
+    options = options || {};
+    options.stepping = true;
+    var reader = readerFactory(this.name, this.path, options, defer);
+    this.handleReader(reader);
+    return reader;
+  };
   FileQ.prototype.write = function (options, defer) {
     var writer = writerFactory(this.name, this.path, options, defer);
     this.handleWriter(writer);
@@ -178,6 +186,17 @@ function createHandler(execlib, util) {
     }
     return this.fileQ(name).read(options, defer);
   };
+  FileDataBase.prototype.stepread = function (name, options, defer) {
+    if(this.closingDefer){
+      if(defer){
+        defer.resolve();
+      }
+      return;
+    }
+    options = options || {};
+    options.stepping = true;
+    return this.fileQ(name).stepread(options, defer);
+  };
   FileDataBase.prototype.write = function (name, options, defer) {
     if(this.closingDefer){
       if(defer){
@@ -207,6 +226,7 @@ function createHandler(execlib, util) {
   lib.inherit(FileDataBaseTxn, FileDataBase);
   FileDataBaseTxn.prototype.commit = FileDataBase.prototype.close; //just terminology
   FileDataBaseTxn.prototype.destroy = function () {
+    //console.log('FileDataBaseTxn destroying', this);
     FileDataBase.prototype.destroy.call(this);
     if (this.rootpath === null) {
       this.postMortem();
@@ -234,7 +254,7 @@ function createHandler(execlib, util) {
 module.exports = createHandler;
 
 }).call(this,require('_process'))
-},{"./fileoperationcreator":5,"./readers":6,"./writers":8,"_process":26}],5:[function(require,module,exports){
+},{"./fileoperationcreator":5,"./readers":6,"./writers":8,"_process":27}],5:[function(require,module,exports){
 var fs = require('fs');
 function createFileOperation(execlib, util) {
   'use strict';
@@ -312,7 +332,7 @@ function createFileOperation(execlib, util) {
       );
     } else {
       //console.log('returning originalFS.size', this.originalFS.size);
-      return this.originalFS.size;
+      return q(this.originalFS.size);
     }
     return d.promise;
   };
@@ -382,7 +402,7 @@ function createFileOperation(execlib, util) {
 
 module.exports = createFileOperation;
 
-},{"fs":20}],6:[function(require,module,exports){
+},{"fs":21}],6:[function(require,module,exports){
 (function (Buffer){
 var fs = require('fs'),
   Path = require('path');
@@ -446,7 +466,8 @@ function createReaders(execlib,FileOperation,util) {
     this.open();
   };
   FileReader.prototype.onOpenWithSizeForReadWhole = function (startfrom, defer, size) {
-    this.read(startfrom, size, defer);
+    startfrom = startfrom || 0;
+    this.read(startfrom, size-startfrom, defer);
   };
 
   FileReader.prototype.readInFixedChunks = function (recordsize, processfn) { 
@@ -480,10 +501,52 @@ function createReaders(execlib,FileOperation,util) {
   };
   FileReader.prototype.openMode = 'r';
 
-  function FileTransmitter(name, path, defer) {
+  function FileTransmitter(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
+    this.options = options;
+    this.buffer = null;
   }
   lib.inherit(FileTransmitter,FileReader);
+  FileTransmitter.prototype.go = function () {
+    this.result = 0;
+    this.size().then(
+      this.onSizeForTransmit.bind(this)
+    );
+  };
+  FileTransmitter.prototype.onSizeForTransmit = function () {
+    if (!this.openDefer) {
+      return;
+    }
+    this.openDefer.promise.then(
+      this.step.bind(this)
+    );
+    this.open();
+  }
+  FileTransmitter.prototype.step = function () {
+    if (!(this.originalFS && this.originalFS.size)) {
+      return;
+    }
+    var size = Math.min(this.originalFS.size-this.result, 0xffff);
+    //console.log('size', this.originalFS.size, 'read', this.result, 'to read', size);
+    if (size < 1) {
+      this.destroy();
+      return;
+    }
+    this.read(this.result, size).then(
+      this.optionallyStep.bind(this),
+      this.fail.bind(this),
+      this.onChunk.bind(this)
+    );
+  };
+  FileTransmitter.prototype.optionallyStep = function () {
+    if (!this.options.stepping) {
+      this.step();
+    }
+  };
+  FileTransmitter.prototype.onChunk = function (chunk) {
+    this.result += chunk.length;
+    this.notify(chunk);
+  };
 
   function ParsedFileReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
@@ -726,18 +789,30 @@ function createReaders(execlib,FileOperation,util) {
     }
   };
 
+  /*
+   * options: {
+   *   filecontents: { //options
+   *     modulename: '*' or a real parser modulename,
+   *     parsers: {
+   *       modulename: modulepropertyhash for spawning
+   *     }
+   *   },
+   *   filestats: ['filebasename', 'filename', 'fileext', 'filetype', 'created', 'lastmodified'],
+   *   metastats: [stringorfetcher],
+   *   files: ['filename1', ..., 'filenameN'], //whitelist
+   *   filetypes: ['f', 'd'], //whitelist
+   * }
+   */
   function DirReader(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
     this.filecount = 0;
     this.options = options;
     this.parserInfo = {
-      needed: false,
       waiting: false,
       instance: null
     };
     if (this.options.filecontents) {
       if (this.options.filecontents.modulename) {
-        this.parserInfo.needed = true;
         if (this.options.filecontents.modulename !== '*') {
           execlib.execSuite.parserRegistry.spawn(this.options.filecontents.modulename, this.options.filecontents.propertyhash).done(
             this.onParserInstantiated.bind(this),
@@ -755,7 +830,7 @@ function createReaders(execlib,FileOperation,util) {
   };
   DirReader.prototype.go = function () {
     //console.log('going for', this.path, 'with current parserInfo', this.parserInfo, 'and options', this.options);
-    if(this.parserInfo.needed && this.options.filecontents.modulename !== '*') {
+    if(this.options.needparsing && this.options.filecontents.modulename !== '*') {
       if (!this.parserInfo.instance) {
         this.parserInfo.waiting = true;
         return;
@@ -848,7 +923,7 @@ function createReaders(execlib,FileOperation,util) {
     return d.promise;
   };
   DirReader.prototype.needParsing = function () {
-    return this.parserInfo.needed && 
+    return this.options.needparsing && 
       (
         this.options.filecontents.modulename === '*' ||
         this.options.filecontents.parsers
@@ -917,7 +992,7 @@ function createReaders(execlib,FileOperation,util) {
   };
   DirReader.prototype.reportFile = function (filename, reportobj) {
     //console.log('reportFile', filename, this.parserInfo);
-    if (this.parserInfo.needed) {
+    if (this.options.needparsing) {
       var d = q.defer(),
         parser = readerFactory(filename, Path.join(this.path,filename), {parserinstance:this.parserInfo.instance}, d);
       d.promise.done(
@@ -994,6 +1069,7 @@ function createReaders(execlib,FileOperation,util) {
     if(options.traverse){
       return new DirReader(name, path, options, defer);
     }
+    return new FileTransmitter(name, path, options, defer);
   }
 
   return readerFactory;
@@ -1002,7 +1078,7 @@ function createReaders(execlib,FileOperation,util) {
 module.exports = createReaders;
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":21,"fs":20,"path":25}],7:[function(require,module,exports){
+},{"buffer":22,"fs":21,"path":26}],7:[function(require,module,exports){
 (function (process){
 var fs = require('fs'),
     Path = require('path'),
@@ -1114,7 +1190,7 @@ function createUtil(execlib){
 module.exports = createUtil;
 
 }).call(this,require('_process'))
-},{"_process":26,"fs":20,"mkdirp":11,"path":25}],8:[function(require,module,exports){
+},{"_process":27,"fs":21,"mkdirp":11,"path":26}],8:[function(require,module,exports){
 (function (Buffer){
 var fs = require('fs'),
   child_process = require('child_process'),
@@ -1302,8 +1378,8 @@ function createWriters(execlib,FileOperation) {
   };
 
   function TxnCommiter(txndirname, name, path, defer) {
-    //console.log('new TxnCommiter', txndirname, name, path);
     FileOperation.call(this, name, path, defer);
+    //console.log('new TxnCommiter', txndirname, name, path, '=>', this);
     this.txndirname = txndirname;
     this.affectedfilepaths = null;
   }
@@ -1331,10 +1407,14 @@ function createWriters(execlib,FileOperation) {
   };
   */
   TxnCommiter.prototype.onMkDir = function (err, stdio, stderr) {
-    child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+Path.dirname(this.path), this.onCpRp.bind(this));
+    if (this.name === '.') {
+      child_process.exec('cp -rp '+this.txndirname+'/* '+this.path, this.onCpRp.bind(this));
+    } else {
+      child_process.exec('cp -rp '+Path.join(this.txndirname, this.name)+' '+Path.dirname(this.path), this.onCpRp.bind(this));
+    }
   };
   TxnCommiter.prototype.onCpRp = function () {
-    var r = child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
+    child_process.exec('rm -rf '+this.txndirname, this.onRmRf.bind(this));
   };
   TxnCommiter.prototype.onRmRf = function () {
     //console.log('onRmRf');
@@ -1364,7 +1444,7 @@ function createWriters(execlib,FileOperation) {
 module.exports = createWriters;
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":21,"child_process":20,"fs":20,"path":25}],9:[function(require,module,exports){
+},{"buffer":22,"child_process":21,"fs":21,"path":26}],9:[function(require,module,exports){
 module.exports = {
 };
 
@@ -1506,7 +1586,7 @@ mkdirP.sync = function sync (p, opts, made) {
 };
 
 }).call(this,require('_process'))
-},{"_process":26,"fs":20,"path":25}],12:[function(require,module,exports){
+},{"_process":27,"fs":21,"path":26}],12:[function(require,module,exports){
 function parserRegistryIntroducer(execlib){
   'use strict';
   var lib = execlib.lib,
@@ -1638,12 +1718,15 @@ function createTasks(execlib){
   },{
     name: 'downloadFile',
     klass: require('./tasks/downloadFile')(execlib)
+  },{
+    name: 'downstreamFile',
+    klass: require('./tasks/downstreamFile')(execlib)
   }];
 }
 
 module.exports = createTasks;
 
-},{"./tasks/downloadFile":17,"./tasks/fetchOrCreateWithData":18,"./tasks/transmitFile":19}],17:[function(require,module,exports){
+},{"./tasks/downloadFile":17,"./tasks/downstreamFile":18,"./tasks/fetchOrCreateWithData":19,"./tasks/transmitFile":20}],17:[function(require,module,exports){
 (function (process){
 function createDownloadFileTask(execlib){
   'use strict';
@@ -1757,7 +1840,104 @@ function createDownloadFileTask(execlib){
 module.exports = createDownloadFileTask;
 
 }).call(this,require('_process'))
-},{"../fileapi/creator":3,"_process":26,"fs":20}],18:[function(require,module,exports){
+},{"../fileapi/creator":3,"_process":27,"fs":21}],18:[function(require,module,exports){
+function createDownstreamFileTask(execlib){
+  'use strict';
+  var fs = require('fs'),
+    lib = execlib.lib,
+    q = lib.q,
+    execSuite = execlib.execSuite,
+    SinkTask = execSuite.SinkTask,
+    taskRegistry = execSuite.taskRegistry;
+
+  function DownstreamFileTask(prophash){
+    SinkTask.call(this,prophash);
+    this.sink = prophash.sink;
+    this.ipaddress = prophash.ipaddress;
+    this.filename = prophash.filename;
+    this.localfilename = prophash.localfilename || prophash.filename;
+    this.parsermodulename = prophash.parsermodulename;
+    this.startfrom = prophash.firstrecordindex || 0;
+    this.quantity = prophash.recordcount;
+    this.cb = prophash.cb;
+    this.going = false;
+    this.writeDefer = q.defer();
+    this.report = {};
+    this.writeDefer.promise.done(
+      this.writerSucceeded.bind(this),
+      this.writerFailed.bind(this),
+      function(record){
+        console.log(record,'written');
+      }
+    );
+  }
+  lib.inherit(DownstreamFileTask, SinkTask);
+  DownstreamFileTask.prototype.__cleanUp = function () {
+    this.report = null;
+    this.writeDefer = null;
+    this.going = null;
+    this.cb = null;
+    this.quantity = null;
+    this.startfrom = null;
+    this.parsermodulename = null;
+    this.localfilename = null;
+    this.filename = null;
+    this.ipaddress = null;
+    this.sink = null;
+    SinkTask.prototype.__cleanUp.call(this);
+  };
+  DownstreamFileTask.prototype.writerSucceeded = function (byteswritten) {
+    this.report.size = byteswritten;
+    if (this.cb){
+      this.cb(this.report);
+    }
+    this.destroy();
+  };
+  DownstreamFileTask.prototype.writerFailed = function (reason) {
+    this.report.exception = reason;
+    if (this.cb) {
+      this.cb(this.report);
+    }
+    this.destroy();
+  };
+  DownstreamFileTask.prototype.go = function () {
+    if(this.going === true || this.going === null){
+      return;
+    }
+    this.going = true;
+    taskRegistry.run('transmitTcp', {
+      sink: this.sink,
+      ipaddress: this.ipaddress,
+      options: {
+        filename: this.filename,
+        modulename: this.parsermodulename,
+        startfrom: this.startfrom,
+        quantity: this.quantity,
+        download: true
+      },
+      onPayloadNeeded: this.onPayloadNeeded.bind(this),
+      onIncomingPacket: this.onIncomingPacket.bind(this),
+      onOver: this.onTransmitOver.bind(this)
+    });
+  };
+  DownstreamFileTask.prototype.onIncomingPacket = function (packet) {
+    this.cb(packet);
+  };
+  DownstreamFileTask.prototype.onTransmitOver = function () {
+    this.cb(null);
+  };
+  DownstreamFileTask.prototype.onPayloadNeeded = function () {
+    //dead end, because there is nothing to say
+    var d = q.defer();
+    return d.promise;
+  };
+  DownstreamFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename','cb'];
+  return DownstreamFileTask;
+}
+
+module.exports = createDownstreamFileTask;
+
+},{"fs":21}],19:[function(require,module,exports){
 function createFetchOrCreateWithDataTask(execlib){
   'use strict';
   var lib = execlib.lib,
@@ -1818,7 +1998,7 @@ function createFetchOrCreateWithDataTask(execlib){
 
 module.exports = createFetchOrCreateWithDataTask;
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 (function (process,Buffer){
 function createTransmitFileTask(execlib){
   'use strict';
@@ -1955,9 +2135,9 @@ function createTransmitFileTask(execlib){
 module.exports = createTransmitFileTask;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"../fileapi/util":7,"_process":26,"buffer":21,"fs":20}],20:[function(require,module,exports){
+},{"../fileapi/util":7,"_process":27,"buffer":22,"fs":21}],21:[function(require,module,exports){
 
-},{}],21:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /*!
  * The buffer module from node.js, for the browser.
  *
@@ -2584,31 +2764,20 @@ function base64Slice (buf, start, end) {
 
 function utf8Slice (buf, start, end) {
   end = Math.min(buf.length, end)
-  var firstByte
-  var secondByte
-  var thirdByte
-  var fourthByte
-  var bytesPerSequence
-  var tempCodePoint
-  var codePoint
   var res = []
+
   var i = start
-
-  for (; i < end; i += bytesPerSequence) {
-    firstByte = buf[i]
-    codePoint = 0xFFFD
-
-    if (firstByte > 0xEF) {
-      bytesPerSequence = 4
-    } else if (firstByte > 0xDF) {
-      bytesPerSequence = 3
-    } else if (firstByte > 0xBF) {
-      bytesPerSequence = 2
-    } else {
-      bytesPerSequence = 1
-    }
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
 
     if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
       switch (bytesPerSequence) {
         case 1:
           if (firstByte < 0x80) {
@@ -2647,8 +2816,10 @@ function utf8Slice (buf, start, end) {
       }
     }
 
-    if (codePoint === 0xFFFD) {
-      // we generated an invalid codePoint so make sure to only advance by 1 byte
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
       bytesPerSequence = 1
     } else if (codePoint > 0xFFFF) {
       // encode to utf16 (surrogate pair dance)
@@ -2658,9 +2829,33 @@ function utf8Slice (buf, start, end) {
     }
 
     res.push(codePoint)
+    i += bytesPerSequence
   }
 
-  return String.fromCharCode.apply(String, res)
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
 }
 
 function asciiSlice (buf, start, end) {
@@ -3379,7 +3574,6 @@ function utf8ToBytes (string, units) {
           // unexpected trail
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
           continue
-
         } else if (i + 1 === length) {
           // unpaired lead
           if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
@@ -3401,7 +3595,6 @@ function utf8ToBytes (string, units) {
 
       // valid surrogate pair
       codePoint = leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00 | 0x10000
-
     } else if (leadSurrogate) {
       // valid bmp char, but last char was a lead
       if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
@@ -3479,7 +3672,7 @@ function blitBuffer (src, dst, offset, length) {
   return i
 }
 
-},{"base64-js":22,"ieee754":23,"is-array":24}],22:[function(require,module,exports){
+},{"base64-js":23,"ieee754":24,"is-array":25}],23:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -3605,7 +3798,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],23:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -3691,7 +3884,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 
 /**
  * isArray
@@ -3726,7 +3919,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 (function (process){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -3954,7 +4147,7 @@ var substr = 'ab'.substr(-1) === 'b'
 ;
 
 }).call(this,require('_process'))
-},{"_process":26}],26:[function(require,module,exports){
+},{"_process":27}],27:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -3987,7 +4180,9 @@ function drainQueue() {
         currentQueue = queue;
         queue = [];
         while (++queueIndex < len) {
-            currentQueue[queueIndex].run();
+            if (currentQueue) {
+                currentQueue[queueIndex].run();
+            }
         }
         queueIndex = -1;
         len = queue.length;
@@ -4039,7 +4234,6 @@ process.binding = function (name) {
     throw new Error('process.binding is not supported');
 };
 
-// TODO(shtylman)
 process.cwd = function () { return '/' };
 process.chdir = function (dir) {
     throw new Error('process.chdir is not supported');

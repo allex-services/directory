@@ -60,7 +60,8 @@ function createReaders(execlib,FileOperation,util) {
     this.open();
   };
   FileReader.prototype.onOpenWithSizeForReadWhole = function (startfrom, defer, size) {
-    this.read(startfrom, size, defer);
+    startfrom = startfrom || 0;
+    this.read(startfrom, size-startfrom, defer);
   };
 
   FileReader.prototype.readInFixedChunks = function (recordsize, processfn) { 
@@ -97,6 +98,7 @@ function createReaders(execlib,FileOperation,util) {
   function FileTransmitter(name, path, options, defer) {
     FileReader.call(this, name, path, defer);
     this.options = options;
+    this.buffer = null;
   }
   lib.inherit(FileTransmitter,FileReader);
   FileTransmitter.prototype.go = function () {
@@ -105,30 +107,37 @@ function createReaders(execlib,FileOperation,util) {
       this.onSizeForTransmit.bind(this)
     );
   };
-  FileTransmitter.prototype.onSizeForTransmit = function (size) {
+  FileTransmitter.prototype.onSizeForTransmit = function () {
     if (!this.openDefer) {
       return;
     }
     this.openDefer.promise.then(
-      this.doTransmission.bind(this, size)
+      this.step.bind(this)
     );
     this.open();
   }
-  FileTransmitter.prototype.doTransmission = function (size) {
-    console.log('reading', size, 'bytes from', this.name, this.path);
-    try {
-    this.read(0, size).then(
-      this.destroy.bind(this),
+  FileTransmitter.prototype.step = function () {
+    if (!(this.originalFS && this.originalFS.size)) {
+      return;
+    }
+    var size = Math.min(this.originalFS.size-this.result, 0xffff);
+    //console.log('size', this.originalFS.size, 'read', this.result, 'to read', size);
+    if (size < 1) {
+      this.destroy();
+      return;
+    }
+    this.read(this.result, size).then(
+      this.optionallyStep.bind(this),
       this.fail.bind(this),
       this.onChunk.bind(this)
     );
-    } catch (e) {
-      console.error(e.stack);
-      console.error(e);
+  };
+  FileTransmitter.prototype.optionallyStep = function () {
+    if (!this.options.stepping) {
+      this.step();
     }
   };
   FileTransmitter.prototype.onChunk = function (chunk) {
-    console.log('on chunk', chunk);
     this.result += chunk.length;
     this.notify(chunk);
   };

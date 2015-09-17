@@ -83,7 +83,7 @@ function createUser(execlib,ParentUser){
   };
   FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
     if(!this.options){
-      this.closeAllAndDie(server,connection);
+      this.closeBoth(server,connection);
     }else{
       this.options.writer.write(buffer).done(this.onPacketWritten.bind(this));
     }
@@ -100,13 +100,12 @@ function createUser(execlib,ParentUser){
   function FileDownloadServer(user, options){
     ParentUser.prototype.TcpTransmissionServer.call(this, user, options);
     this.freetowrite = false;
-    this.readPromise = true;
+    this.reader = null;
     this.q = new lib.Fifo();
   }
   lib.inherit(FileDownloadServer, ParentUser.prototype.TcpTransmissionServer);
   FileDownloadServer.prototype.destroy = function () {
-    console.log('FileDownloadServer dying');
-    if(this.readPromise){
+    if(this.reader){
       return;
     }
     //console.log('my q',this.q);
@@ -130,35 +129,31 @@ function createUser(execlib,ParentUser){
     this.freetowrite = true;
     var next = this.q.pop();
     if(next){
-      this.send(server, connection, next);
+      this.sendPacket(server, connection, next);
     }
+    this.reader.step();
   };
-  FileDownloadServer.prototype.onConnection = function (server, connection) {
+  FileDownloadServer.prototype.onAuthenticatedConnection = function (server, connection) {
     //console.log('client connected for download');
-    if(this.readPromise && this.readPromise!==true){
+    if(this.reader){
       return;
     }
-    ParentUser.prototype.TcpTransmissionServer.prototype.onConnection.call(this, server, connection);
-    this.readPromise = this.user.__service.db.read(this.options.filename, this.options);
+    ParentUser.prototype.TcpTransmissionServer.prototype.onAuthenticatedConnection.call(this, server, connection);
+    this.reader = this.user.__service.db.stepread(this.options.filename, this.options);
     this.freetowrite = true;
-    this.readPromise.done(
+    this.reader.defer.promise.done(
       this.readOver.bind(this, server, connection),
       this.readOver.bind(this, server, connection),
       this.sendPacket.bind(this, server, connection)
     );
-    //console.log('readPromise set');
   };
   FileDownloadServer.prototype.readOver = function (server, connection) {
-    this.readPromise = null;
-    this.closeAllAndDie(server, connection);
-  };
-  FileDownloadServer.prototype.closeAllAndDie = function (server, connection) {
-    server.close();
-    connection.end();
+    this.reader = null;
+    this.closeBoth(server, connection);
   };
   FileDownloadServer.prototype.sendPacket = function (server, connection, packet) {
     //console.log('sendPacket',this,packet);
-    console.log('sending packet', packet.length);
+    //console.log('sending packet', packet.length);
     if(!this.q){
       console.error('Y ME DED?');
       return;
