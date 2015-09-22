@@ -23,6 +23,8 @@ function createFileOperation(execlib, util) {
     this.active = false;
     this.fh = null;
     this.openDefer = q.defer();
+    var destroyer = this.destroy.bind(this);
+    defer.promise.then(destroyer, destroyer);
   };
   FileOperation.prototype.destroy = function () {
     this.openDefer = null;

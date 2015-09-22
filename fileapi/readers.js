@@ -204,6 +204,7 @@ function createReaders(execlib,FileOperation,util) {
     );
     (hrfr).go();
   };
+  /*
   ParsedFileReader.prototype.onRecordRead = function (parser, record) {
     var rec;
     if (!record) {
@@ -225,6 +226,7 @@ function createReaders(execlib,FileOperation,util) {
       this.fail(e);
     }
   };
+  */
   ParsedFileReader.prototype.onOpenForRawRead = function (start, quantity) {
     //console.log(this.name, 'onOpenForRawRead', start, quantity);
     this.read(start, quantity).done(
