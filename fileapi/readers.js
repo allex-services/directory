@@ -544,7 +544,7 @@ function createReaders(execlib,FileOperation,util) {
   }
   DirReader.prototype.onMeta = function (defer, filename, meta) {
     //console.log(this.name, 'onMeta', filename, meta, require('util').inspect(this.options, {depth:null}));
-    if (!(meta && meta.parserinfo)) {
+    if (!meta) {
       defer.resolve(false);
       return;
     }
@@ -560,6 +560,10 @@ function createReaders(execlib,FileOperation,util) {
       meta.parserinfo.propertyhash = lib.extend({}, meta.parserinfo.propertyhash, parserfound.propertyhash);
     }
     if (this.needParsing()) {
+      if (!meta.parserinfo) {
+        defer.resolve(false);
+        return;
+      }
       //console.log(filename, 'meta.parserinfo', meta.parserinfo, 'this.options.filecontents', this.options.filecontents);
       execlib.execSuite.parserRegistry.spawn(meta.parserinfo.modulename, meta.parserinfo.propertyhash).done(
         this.onMetaParser.bind(this, defer, filename),
@@ -655,6 +659,9 @@ function createReaders(execlib,FileOperation,util) {
   };
   DirReader.prototype.extract_lastmodified = function (filename, fstats) {
     return fstats.mtime;
+  };
+  DirReader.prototype.extract_filesize = function (filename, fstats) {
+    return fstats.size;
   };
 
 
