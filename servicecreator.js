@@ -1,13 +1,12 @@
 var fs = require('fs'),
   Path = require('path');
 
-function createDirectoryService(execlib,ParentServicePack){
+function createDirectoryService(execlib, ParentServicePack, fileApi){
   'use strict';
   var ParentService = ParentServicePack.Service,
     lib = execlib.lib,
     q = lib.q,
-    execSuite = execlib.execSuite,
-    fileApi = require('./fileapi/creator')(execlib);
+    execSuite = execlib.execSuite;
 
   function factoryCreator(parentFactory){
     return {
@@ -36,6 +35,7 @@ function createDirectoryService(execlib,ParentServicePack){
       if (lib.isArray(userhash.path)) {
         try {
           userhash.path = Path.join.apply(Path,userhash.path);
+          console.log('user path is', userhash.path);
         } catch (e) {
           userhash.path = '.';
         }

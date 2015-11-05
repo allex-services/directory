@@ -1,4 +1,4 @@
-function createTransmitFileTask(execlib){
+function createTransmitFileTask(execlib, fileapi){
   'use strict';
   var fs = require('fs'),
       lib = execlib.lib,
@@ -6,7 +6,7 @@ function createTransmitFileTask(execlib){
       execSuite = execlib.execSuite,
       SinkTask = execSuite.SinkTask,
       taskRegistry = execSuite.taskRegistry,
-      util = require('../fileapi/util')(execlib);
+      util = fileapi.util;
   function TransmitFileTask(prophash){
     SinkTask.call(this,prophash);
     this.sink = prophash.sink;

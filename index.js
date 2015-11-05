@@ -7,12 +7,13 @@ function createServicePack(execlib){
     execSuite = execlib.execSuite,
     libRegistry = execSuite.libRegistry;
 
-    libRegistry.register('allex_directorylib').then(
-      onDirectoryLib.bind(null, d, execlib),
-      d.reject.bind(d)
-    );
+  libRegistry.register('allex_directorylib').then(
+    onDirectoryLib.bind(null, d, execlib),
+    console.error.bind(console, 'allex_directorylib ooops'),
+    d.reject.bind(d)
+  );
 
-    return d.promise;
+  return d.promise;
 
   /*
   var ret = require('./clientside')(execlib),
@@ -27,14 +28,14 @@ function createServicePack(execlib){
 }
 
 
-function onDirectoryLib(defer, execlib) {
+function onDirectoryLib(defer, execlib, fileapi) {
   'use strict';
-  var ret = require('./clientside')(execlib),
+  var ret = require('./clientside')(execlib, fileapi),
     execSuite = execlib.execSuite,
     ParentServicePack = execSuite.registry.get('.');
 
   require('./parserregistryintroducer')(execlib);
-  ret.Service = require('./servicecreator')(execlib,ParentServicePack);
+  ret.Service = require('./servicecreator')(execlib, ParentServicePack, fileapi);
 
   defer.resolve(ret);
 }

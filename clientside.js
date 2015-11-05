@@ -1,4 +1,4 @@
-function createClientSide(execlib){
+function createClientSide(execlib, fileapi){
   'use strict';
   var execSuite = execlib.execSuite,
   ParentServicePack = execSuite.registry.get('.');
@@ -6,7 +6,7 @@ function createClientSide(execlib){
 
   return {
     SinkMap: require('./sinkmapcreator')(execlib,ParentServicePack),
-    Tasks: require('./taskcreator')(execlib)
+    Tasks: require('./taskcreator')(execlib, fileapi)
   };
 }
 

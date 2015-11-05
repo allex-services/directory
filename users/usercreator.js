@@ -336,9 +336,6 @@ function createUser(execlib,ParentUser){
   };
   User.prototype.notifyFSEvent = function (originalfs, newfs, path) {
   };
-  User.prototype.metaPath = function (filepath) {
-    return Path.join(Path.dirname(filepath),'.meta',Path.basename(filepath));
-  };
   User.prototype.getSessionCtor = execSuite.userSessionFactoryCreator(DirectorySession);
 
   return User;

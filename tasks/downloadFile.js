@@ -1,12 +1,11 @@
-function createDownloadFileTask(execlib){
+function createDownloadFileTask(execlib, fileapi){
   'use strict';
   var fs = require('fs'),
     lib = execlib.lib,
     q = lib.q,
     execSuite = execlib.execSuite,
     SinkTask = execSuite.SinkTask,
-    taskRegistry = execSuite.taskRegistry,
-    fileapi = require('../fileapi/creator')(execlib);
+    taskRegistry = execSuite.taskRegistry;
 
   function DownloadFileTask(prophash){
     SinkTask.call(this,prophash);
