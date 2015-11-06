@@ -252,7 +252,7 @@ function createUser(execlib,ParentUser){
     }
     if (options.metadata) {
       txn = this.__service.db.begin(Path.dirname(options.filename));
-      metauploadpath = this.metaPath(options.filename);
+      metauploadpath = txn.metaPath(options.filename);
       writemetadatadefer = q.defer();
       this.writeOnDB(txn, metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
       writemetadatadefer.promise.done(
