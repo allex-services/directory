@@ -254,11 +254,13 @@ function createUser(execlib,ParentUser){
       txn = this.__service.db.begin(Path.dirname(options.filename));
       metauploadpath = txn.metaPath(options.filename);
       writemetadatadefer = q.defer();
-      this.writeOnDB(txn, metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
       writemetadatadefer.promise.done(
         this.realizeUploadRequest.bind(this, txn, options, defer),
         defer.reject.bind(defer)
       );
+      /*
+      */
+      txn.writeToFileName(metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
     } else {
       this.realizeUploadRequest(txn, options, defer);
     }
@@ -298,17 +300,7 @@ function createUser(execlib,ParentUser){
     this.__service.db.read(filename, options, defer);
   };
   User.prototype.write = function (filename, parserinfo, data, defer) {
-    this.writeOnDB(this.__service.db, filename, parserinfo, data, defer);
-  };
-  User.prototype.writeOnDB = function (db, filename, parserinfo, data, defer) {
-    if(data===null){
-      console.log('Y data null?');
-      defer.reject(new lib.Error('WILL_NOT_WRITE_EMPTY_FILE','fs touch not supported'));
-      return;
-    }
-    db.write(filename, parserinfo, defer).then(function(writer){
-      writer.writeAll(data);
-    });
+    this.__service.db.writeToFileName(filename, parserinfo, data, defer);
   };
   User.prototype.append = function(filename,data,defer){
     try{
