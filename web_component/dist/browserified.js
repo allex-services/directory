@@ -6,7 +6,6 @@ function createClientSide(execlib, fileapi){
   'use strict';
   var execSuite = execlib.execSuite,
   ParentServicePack = execSuite.registry.get('.');
-  require('./parserregistryintroducer')(execlib);
 
   return {
     SinkMap: require('./sinkmapcreator')(execlib,ParentServicePack),
@@ -16,7 +15,7 @@ function createClientSide(execlib, fileapi){
 
 module.exports = createClientSide;
 
-},{"./parserregistryintroducer":5,"./sinkmapcreator":6,"./taskcreator":9}],3:[function(require,module,exports){
+},{"./sinkmapcreator":5,"./taskcreator":8}],3:[function(require,module,exports){
 module.exports = {
 };
 
@@ -57,74 +56,6 @@ module.exports = {
 };
 
 },{}],5:[function(require,module,exports){
-function parserRegistryIntroducer(execlib){
-  'use strict';
-  var lib = execlib.lib,
-    q = lib.q,
-    execSuite = execlib.execSuite,
-    parserRegistry = execSuite.parserRegistry;
-  if(parserRegistry){
-    return;
-  }
-  /*
-  function ParserRegistry(){
-    lib.Map.call(this);
-  }
-  lib.inherit(ParserRegistry,lib.Map);
-  ParserRegistry.prototype.register = function (modulename,defer) {
-    defer = defer || q.defer();
-    try{
-      var parserctor = this.get(modulename);
-      if(!parserctor){
-        parserctor = require(modulename)(execlib);
-        if('function' === typeof parserctor.done){
-          parserctor.done(this.finalizeRegister.bind(this, modulename, defer));
-        }else{
-          this.finalizeRegister(modulename, defer, parserctor);
-        }
-      } else {
-        defer.resolve(parserctor);
-      }
-    }
-    catch(e){
-      if(execSuite.installFromError){
-        execSuite.installFromError(this.onInstallFromError.bind(this,modulename,defer,e),e);
-      }else{
-        console.log(e.stack);
-        console.log(e);
-        defer.reject(e);
-      }
-    }
-    return defer.promise;
-  };
-  ParserRegistry.prototype.finalizeRegister = function (modulename, defer, parserctor) {
-    this.add(modulename, parserctor);
-    defer.resolve(parserctor);
-  };
-  ParserRegistry.prototype.spawn = function (modulename, prophash) {
-    var d = q.defer();
-    this.register(modulename).done(
-      function(parserctor){
-        d.resolve(new parserctor(prophash||{}));
-      },
-      d.reject.bind(d)
-    );
-    return d.promise;
-  };
-  ParserRegistry.prototype.onInstallFromError = function (modulename,defer,error,ok) {
-    if(ok){
-      this.register(modulename,defer);
-    }else{
-      defer.reject(error);
-    }
-  };
-  */
-  execSuite.parserRegistry = new execSuite.RegistryBase();
-}
-
-module.exports = parserRegistryIntroducer;
-
-},{}],6:[function(require,module,exports){
 function sinkMapCreator(execlib,ParentServicePack){
   'use strict';
   var sinkmap = new (execlib.lib.Map), ParentSinkMap = ParentServicePack.SinkMap;
@@ -136,7 +67,7 @@ function sinkMapCreator(execlib,ParentServicePack){
 
 module.exports = sinkMapCreator;
 
-},{"./sinks/servicesinkcreator":7,"./sinks/usersinkcreator":8}],7:[function(require,module,exports){
+},{"./sinks/servicesinkcreator":6,"./sinks/usersinkcreator":7}],6:[function(require,module,exports){
 function createServiceSink(execlib,ParentSink){
   'use strict';
 
@@ -156,7 +87,7 @@ function createServiceSink(execlib,ParentSink){
 
 module.exports = createServiceSink;
 
-},{"../methoddescriptors/serviceuser":3}],8:[function(require,module,exports){
+},{"../methoddescriptors/serviceuser":3}],7:[function(require,module,exports){
 function createUserSink(execlib,ParentSink){
   'use strict';
 
@@ -176,7 +107,7 @@ function createUserSink(execlib,ParentSink){
 
 module.exports = createUserSink;
 
-},{"../methoddescriptors/user":4}],9:[function(require,module,exports){
+},{"../methoddescriptors/user":4}],8:[function(require,module,exports){
 function createTasks(execlib, fileapi){
   'use strict';
   return [{
@@ -196,7 +127,7 @@ function createTasks(execlib, fileapi){
 
 module.exports = createTasks;
 
-},{"./tasks/downloadFile":10,"./tasks/downstreamFile":11,"./tasks/fetchOrCreateWithData":12,"./tasks/transmitFile":13}],10:[function(require,module,exports){
+},{"./tasks/downloadFile":9,"./tasks/downstreamFile":10,"./tasks/fetchOrCreateWithData":11,"./tasks/transmitFile":12}],9:[function(require,module,exports){
 (function (process){
 function createDownloadFileTask(execlib, fileapi){
   'use strict';
@@ -309,7 +240,7 @@ function createDownloadFileTask(execlib, fileapi){
 module.exports = createDownloadFileTask;
 
 }).call(this,require('_process'))
-},{"_process":19,"fs":14}],11:[function(require,module,exports){
+},{"_process":18,"fs":13}],10:[function(require,module,exports){
 function createDownstreamFileTask(execlib){
   'use strict';
   var fs = require('fs'),
@@ -406,7 +337,7 @@ function createDownstreamFileTask(execlib){
 
 module.exports = createDownstreamFileTask;
 
-},{"fs":14}],12:[function(require,module,exports){
+},{"fs":13}],11:[function(require,module,exports){
 function createFetchOrCreateWithDataTask(execlib){
   'use strict';
   var lib = execlib.lib,
@@ -467,7 +398,7 @@ function createFetchOrCreateWithDataTask(execlib){
 
 module.exports = createFetchOrCreateWithDataTask;
 
-},{}],13:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 (function (process,Buffer){
 function createTransmitFileTask(execlib, fileapi){
   'use strict';
@@ -604,9 +535,9 @@ function createTransmitFileTask(execlib, fileapi){
 module.exports = createTransmitFileTask;
 
 }).call(this,require('_process'),require("buffer").Buffer)
-},{"_process":19,"buffer":15,"fs":14}],14:[function(require,module,exports){
+},{"_process":18,"buffer":14,"fs":13}],13:[function(require,module,exports){
 
-},{}],15:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 (function (global){
 /*!
  * The buffer module from node.js, for the browser.
@@ -2154,7 +2085,7 @@ function blitBuffer (src, dst, offset, length) {
 }
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"base64-js":16,"ieee754":17,"is-array":18}],16:[function(require,module,exports){
+},{"base64-js":15,"ieee754":16,"is-array":17}],15:[function(require,module,exports){
 var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 ;(function (exports) {
@@ -2280,7 +2211,7 @@ var lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 	exports.fromByteArray = uint8ToBase64
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
 
-},{}],17:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 exports.read = function (buffer, offset, isLE, mLen, nBytes) {
   var e, m
   var eLen = nBytes * 8 - mLen - 1
@@ -2366,7 +2297,7 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   buffer[offset + i - d] |= s * 128
 }
 
-},{}],18:[function(require,module,exports){
+},{}],17:[function(require,module,exports){
 
 /**
  * isArray
@@ -2401,7 +2332,7 @@ module.exports = isArray || function (val) {
   return !! val && '[object Array]' == str.call(val);
 };
 
-},{}],19:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};

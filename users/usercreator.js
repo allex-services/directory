@@ -250,17 +250,15 @@ function createUser(execlib,ParentUser){
       defer.reject(new lib.Error('NO_FILESIZE_SPECIFIED_FOR_UPLOAD','filesize missing in requestTcpTransmission options'));
       return;
     }
+    txn = options.notransaction ? 
+      this.__service.db
+      :
+      this.__service.db.begin(Path.dirname(options.filename));
     if (options.metadata) {
-      txn = this.__service.db.begin(Path.dirname(options.filename));
-      metauploadpath = txn.metaPath(options.filename);
-      writemetadatadefer = q.defer();
-      writemetadatadefer.promise.done(
+      txn.writeFileMeta(options.filename, options.metadata).done(
         this.realizeUploadRequest.bind(this, txn, options, defer),
         defer.reject.bind(defer)
       );
-      /*
-      */
-      txn.writeToFileName(metauploadpath, {modulename: 'allex_jsonparser'}, options.metadata, writemetadatadefer);
     } else {
       this.realizeUploadRequest(txn, options, defer);
     }
