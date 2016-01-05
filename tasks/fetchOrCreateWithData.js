@@ -10,7 +10,7 @@ function createFetchOrCreateWithDataTask(execlib){
     this.filename = prophash.filename;
     this.data = prophash.data;
     this.parserinfo = {
-      parsermodulename: prophash.parsermodulename,
+      modulename: prophash.parsermodulename,
       propertyhash: prophash.parserpropertyhash
     };
     this.cb = prophash.cb;
