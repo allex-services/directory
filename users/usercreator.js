@@ -93,11 +93,11 @@ function createUser(execlib,ParentUser){
     this.written += bytes;
     this.user.set(this.uploadpath, this.written);
     if (this.written === this.options.filesize) {
-      console.log('FileUploadServer closing writer');
+      //console.log('FileUploadServer closing writer');
       this.options.writer.close();
-    } else {
+    } /*else {
       console.log('FileUploadServer not closing writer because', this.written, '!=', this.options.filesize);
-    }
+    }*/
   };
 
   function FileDownloadServer(user, options){
