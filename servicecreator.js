@@ -1,10 +1,9 @@
 var fs = require('fs'),
   Path = require('path');
 
-function createDirectoryService(execlib, ParentServicePack, fileApi){
+function createDirectoryService(execlib, ParentService, fileApi){
   'use strict';
-  var ParentService = ParentServicePack.Service,
-    lib = execlib.lib,
+  var lib = execlib.lib,
     q = lib.q,
     execSuite = execlib.execSuite;
 
