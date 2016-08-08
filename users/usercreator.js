@@ -60,6 +60,7 @@ function createUser(execlib,ParentUser){
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
   FileUploadServer.prototype.onSuccess = function (txn, result) {
+    console.log('onSuccess', result);
     var d = q.defer();
     txn.commit(d);
     d.promise.done(this.onSuccessDone.bind(this));
@@ -70,10 +71,12 @@ function createUser(execlib,ParentUser){
     d.promise.done(this.onFailureDone.bind(this));
   };
   FileUploadServer.prototype.onSuccessDone = function () {
+    console.log('onSuccessDone');
     if (!this.user) {
       console.error('How come FileUploadServer has no user?', this);
       return;
     }
+    console.log('setting', this.uploadpath, 'to *');
     this.user.set(this.uploadpath, '*');
     this.destroy();
   };
@@ -177,7 +180,7 @@ function createUser(execlib,ParentUser){
     this.waitinguploads = new lib.Map();
     this.fsEventListener = this.__service.db.changed.attach(this.onFSEvent.bind(this));
   }
-  ParentUser.inherit(User,require('../methoddescriptors/user'),[/*visible state fields here*/]/*or a ctor for StateStream filter*/);
+  ParentUser.inherit(User,require('../methoddescriptors/user'),[/*visible state fields here*/['uploads', null]]/*or a ctor for StateStream filter*/);
   User.prototype.__cleanUp = function(){
     if (!this.fsEventListener) {
       return;
@@ -227,7 +230,6 @@ function createUser(execlib,ParentUser){
       uploadpath = ['uploads',filename],
       uploadactive = this.__service.state.get(uploadpath),
       und;
-    //console.log('uploadactive for',uploadpath,':',uploadactive);
     if(uploadactive!==und){
       this.waitinguploads.add(filename,new execSuite.ADS.listenToScalar(uploadpath,{d:this.requestTcpTransmission.bind(this,options,defer)}));
       return true;
