@@ -60,7 +60,7 @@ function createUser(execlib,ParentUser){
     ParentUser.prototype.TcpTransmissionServer.prototype.destroy.call(this);
   };
   FileUploadServer.prototype.onSuccess = function (txn, result) {
-    console.log('onSuccess', result);
+    //console.log('onSuccess', result);
     var d = q.defer();
     txn.commit(d);
     d.promise.done(this.onSuccessDone.bind(this));
@@ -71,12 +71,12 @@ function createUser(execlib,ParentUser){
     d.promise.done(this.onFailureDone.bind(this));
   };
   FileUploadServer.prototype.onSuccessDone = function () {
-    console.log('onSuccessDone');
+    //console.log('onSuccessDone');
     if (!this.user) {
       console.error('How come FileUploadServer has no user?', this);
       return;
     }
-    console.log('setting', this.uploadpath, 'to *');
+    //console.log('setting', this.uploadpath, 'to *');
     this.user.set(this.uploadpath, '*');
     this.destroy();
   };
@@ -95,6 +95,7 @@ function createUser(execlib,ParentUser){
     //console.log('packet written', this.options.writer.result, 'on', this.uploadpath);
     this.written += bytes;
     this.user.set(this.uploadpath, this.written);
+    //console.log('updating', this.uploadpath, 'to', this.user.get(this.uploadpath));
     if (this.written === this.options.filesize) {
       //console.log('FileUploadServer closing writer');
       this.options.writer.close();
