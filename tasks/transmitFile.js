@@ -113,7 +113,6 @@ function createTransmitFileTask(execlib, fileapi){
     return buff;
   };
   TransmitFileTask.prototype.onWriteConfirmed = function(confirmed){
-    console.log('onWriteConfirmed', confirmed);
     if (isNaN(parseInt(confirmed))) {
       this.finished = confirmed === '*';
     } else {
