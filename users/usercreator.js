@@ -49,7 +49,7 @@ function createUser(execlib,ParentUser){
   }
   lib.inherit(FileUploadServer,ParentUser.prototype.TcpTransmissionServer);
   FileUploadServer.prototype.destroy = function(){
-    if (this.options && this.written !== this.options.filesize) {
+    if (this.options && this.written !== -this.options.filesize) {
       return;
     }
     if(this.uploadpath && this.user && this.user.__service){
@@ -71,17 +71,18 @@ function createUser(execlib,ParentUser){
     d.promise.done(this.onFailureDone.bind(this));
   };
   FileUploadServer.prototype.onSuccessDone = function () {
-    //console.log('onSuccessDone');
     if (!this.user) {
       console.error('How come FileUploadServer has no user?', this);
       return;
     }
     //console.log('setting', this.uploadpath, 'to *');
     this.user.set(this.uploadpath, '*');
+    this.written = -this.written;
     this.destroy();
   };
   FileUploadServer.prototype.onFailureDone = function () {
     this.user.set(this.uploadpath, '!');
+    this.options = null;
     this.destroy();
   };
   FileUploadServer.prototype.processTransmissionPacket = function(server,connection,buffer){
