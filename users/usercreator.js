@@ -304,10 +304,13 @@ function createUser(execlib,ParentUser){
   User.prototype.fetch = function (filename, options, defer) {
     this.__service.db.read(filename, options, defer);
   };
-  User.prototype.write = function (filename, parserinfo, data, defer) {
-    this.__service.db.writeToFileName(filename, parserinfo, data, defer);
+  User.prototype.write = function (filename, options, data, defer) {
+    this.__service.db.writeToFileName(filename, options, data, defer);
   };
-  User.prototype.append = function(filename,data,defer){
+  User.prototype.append = function(filename, options, data, defer){
+    options.append = true;
+    this.__service.db.writeToFileName(filename, options, data, defer);
+    /*
     try{
       fs.appendFileSync(this.__service.pathForFilename(filename),this.__service.dataToFile(data));
       defer.resolve({filesize:this.__service.fileSize(filename)});
@@ -316,6 +319,7 @@ function createUser(execlib,ParentUser){
       console.log(e);
       defer.reject(e);
     }
+    */
   };
   /*
   var util = require('util');

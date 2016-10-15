@@ -3,14 +3,14 @@ module.exports = {
     title: 'filename',
     type: 'string'
   },{
-    title: 'parser info hash (modulename,propertyhash)',
+    title: 'Options Object (modulename,propertyhash)',
     type: 'object'
   }],
   write: [{
     title: 'filename',
     type: 'string'
   },{
-    title: 'parser info hash (modulename,propertyhash)',
+    title: 'Options Object (modulename,propertyhash)',
     type: 'object'
   },
   true
@@ -19,7 +19,7 @@ module.exports = {
     title: 'filename',
     type: 'string'
   },{
-    title: 'parser info hash (modulename,propertyhash)',
+    title: 'Options Object (modulename,propertyhash)',
     type: 'object'
   },
   true
