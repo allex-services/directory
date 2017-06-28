@@ -1,7 +1,6 @@
 function createDownloadFileTask(execlib, fileapi){
   'use strict';
-  var fs = require('fs'),
-    lib = execlib.lib,
+  var lib = execlib.lib,
     q = lib.q,
     execSuite = execlib.execSuite,
     SinkTask = execSuite.SinkTask,
