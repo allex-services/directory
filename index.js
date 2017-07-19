@@ -4,13 +4,13 @@ function createServicePack(){
 
   return {
     service: {
-      dependencies: ['.', 'allex:directory:lib']
+      dependencies: ['.', 'allex_directorylib']
     },
     sinkmap: {
       dependencies: ['.']
     },
     tasks: {
-      dependencies: ['allex:directory:lib']
+      dependencies: ['allex_directorylib']
     }
   };
 }
