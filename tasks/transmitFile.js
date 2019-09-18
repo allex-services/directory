@@ -12,6 +12,7 @@ function createTransmitFileTask(execlib, fileapi){
     this.sink = prophash.sink;
     this.sinkState = null;
     this.stateReader = null;
+    this.transmitTask = null;
     this.ipaddress = prophash.ipaddress;
     this.filename = prophash.filename;
     this.remotefilename = prophash.remotefilename || prophash.filename;
@@ -47,6 +48,10 @@ function createTransmitFileTask(execlib, fileapi){
     this.remotefilename = null;
     this.filename = null;
     this.ipaddress = null;
+    if (this.transmitTask) {
+      this.transmitTask.destroy();
+    }
+    this.transmitTask = null;
     if (this.stateReader) {
       this.stateReader.destroy();
     }
@@ -67,7 +72,7 @@ function createTransmitFileTask(execlib, fileapi){
     }
     this.file = filehandle;
     try{
-    taskRegistry.run('transmitTcp',{
+    this.transmitTask = taskRegistry.run('transmitTcp',{
       sink: this.sink,
       ipaddress: this.ipaddress,
       options: {
