@@ -5,6 +5,7 @@ function createUser(execlib,ParentUser){
   'use strict';
   var lib = execlib.lib,
     q = lib.q,
+    qlib = lib.qlib,
     execSuite = execlib.execSuite,
     UserSession,
     Channel;
@@ -25,8 +26,77 @@ function createUser(execlib,ParentUser){
   function DirectorySession(user, session, gate) {
     UserSession.call(this, user, session, gate);
     this.addChannel(DirectoryChannel);
+    this.filenames = [];
   }
-  UserSession.inherit(DirectorySession);
+  UserSession.inherit(DirectorySession, {
+    beginFileUpload: [{
+      title: 'File Name', 
+      type: 'string'
+    },{
+      title: 'File Size',
+      type: 'number'
+    },{
+      title: 'No Transaction',
+      type: 'bool'
+    },{
+      title: 'Metadata',
+      type: ['null', 'object']
+    }],
+    uploadFileChunk: [{
+      title: 'File Name', 
+      type: 'string'
+    },{
+      title: 'Transaction ID', 
+      type: 'string'
+    },{
+      title: 'File Chunk',
+      type: 'object'
+    }],
+    finishFileUpload: [{
+      title: 'File Name',
+      type: 'string'
+    },{
+      title: 'Transaction ID', 
+      type: 'string'
+    }]
+  });
+  DirectorySession.prototype.__cleanUp = function () {
+    UserSession.prototype.__cleanUp.call(this);
+  };
+  DirectorySession.prototype.startTheDyingProcedure = function () {
+    if (this.filenames) {
+      this.filenames.forEach(this.user.__service.abortFileTransmission.bind(this.user.__service));
+    }
+    this.filenames = null;
+    return UserSession.prototype.startTheDyingProcedure.call(this);
+  };
+  DirectorySession.prototype.beginFileUpload = function (filename, filesize, notransaction, metadata, defer) {
+    var b = this.user.__service.newUpload(filename, filesize, notransaction, metadata);
+    b.then(this.filenames.push.bind(this.filenames, filename));
+    qlib.promise2defer(b, defer);
+  };
+  DirectorySession.prototype.uploadFileChunk = function (filename, txid, chunk, defer) {
+    qlib.promise2defer(this.user.__service.uploadChunk(filename, txid, chunk), defer);
+  };
+  DirectorySession.prototype.finishFileUpload = function (filename, txid, defer) {
+    var rm = this.forgetFilename.bind(this, filename), ffu;
+    ffu = this.user.__service.finishFileUpload(filename, txid);
+    ffu.then(rm, rm);
+    qlib.promise2defer(ffu, defer);
+    filename = null;
+  };
+  DirectorySession.prototype.forgetFilename = function (filename) {
+    var ind;
+    if (!lib.isArray(this.filenames)) {
+      filename = null;
+      return;
+    }
+    ind = this.filenames.indexOf(filename);
+    if (ind>=0) {
+      this.filenames.splice(ind,1);
+    }
+    filename = null;
+  };
   DirectorySession.Channel = DirectoryChannel;
 
   function FileUploadServer(user,options){
