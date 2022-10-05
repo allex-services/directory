@@ -97,7 +97,7 @@ function createTransmitFileTask(execlib, fileapi){
       this.metadata
     ).then(
       this.beginTransmission.bind(this),
-      this.onError.bind(this, 'beginFileUpload')
+      this.onTransmissionError.bind(this, 'beginFileUpload')
     );
   };
   /*
@@ -129,14 +129,14 @@ function createTransmitFileTask(execlib, fileapi){
     if (!chunk) {
       this.finished = true;
       this.sink.sessionCall('finishFileUpload', this.remotefilename, this.transmissionid).then(
-        this.destroy.bind(this),
-        this.onError.bind(this, 'finishFileUpload')
+        this.onAllDone.bind(this),
+        this.onTransmissionError.bind(this, 'finishFileUpload')
       );
       return;
     }
     this.sink.sessionCall('uploadFileChunk', this.remotefilename, this.transmissionid, chunk).then(
       this.transmitFileChunk.bind(this),
-      this.onError.bind(this, 'uploadFileChunk')
+      this.onTransmissionError.bind(this, 'uploadFileChunk')
     );
   };
   TransmitFileTask.prototype.readChunk = function(){
@@ -169,18 +169,23 @@ function createTransmitFileTask(execlib, fileapi){
   TransmitFileTask.prototype.succeeded = function () {
     return this.finished && this.uploaded === this.filesize;
   };
-  TransmitFileTask.prototype.onError = function (title, reason) {
+  TransmitFileTask.prototype.onTransmissionError = function (title, reason) {
     if (reason) {
       reason.source = title;
-    }
-    if (lib.isFunction(this.errorcb)) {
-      this.errorcb(reason);
     }
     if (!lib.isFunction(this.destroy)) {
       console.log('Who dafuq am I?');
       console.log(this);
       process.exit(1);
     }
+    this.destroy(reason);
+  };
+  TransmitFileTask.prototype.onError = function (reason) {
+    if (lib.isFunction(this.errorcb)) {
+      this.errorcb(reason);
+    }
+  };
+  TransmitFileTask.prototype.onAllDone = function (ignore) {
     this.destroy();
   };
   //TransmitFileTask.prototype.compulsoryConstructionProperties = ['sink','ipaddress','filename'];
