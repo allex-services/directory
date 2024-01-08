@@ -282,7 +282,9 @@ function createUser(execlib,ParentUser){
   User.prototype.broadcastFSEvent = function (path, originalfs, newfs) {
     var fseobj = {p:path, o: originalfs, n: newfs};
     this.sessions.traverse(function(s){
-      s.channels.get('fs').onStream(fseobj);
+      if (s.channels) {
+        s.channels.get('fs').onStream(fseobj);
+      }
     });
   };
   User.prototype._checkOnWaitingUploads = function(options,defer){
